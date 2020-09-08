@@ -1,0 +1,83 @@
+---
+title: "Illustration of multiple imputation approaches for incomplete three-level data: accomodating inetractions and non-linear terms"
+author: "Rushani Wijesuriya"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Three-level MI approches}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+This vignette provides a worked example on simulated data (which can be found [here](https://raw.githack.com/moreno-betancur/medRCT/master/medRCT_4med.R)), illutstrating the multiple imputation (MI) approaches that can be used  to handle incomplete three-level data. Our focus is on three-level data resulting from repeated measures nested within higher-level clusters and when the target analysis model includes interactions or quadratic effects involving incomplete covariates which need to be incorporated in the imputation model. An evaluation of these approaches via simulations and an emperical illustation can be found in the paper:  
+
+>Wijesuriya R, Moreno-Betancur M, Carlin JB, De Silva AP, Lee KJ . "Evaluation of approaches for accommodating interactions and non-linear terms in multiple imputation of incomplete three-level data". [https://arxiv.org/abs/1907.06734](https://arxiv.org/abs/1907.06734)
+
+To demonstrate the approaches we consider three random intercept models common in longitudinal settings involving: 
+
+- an interaction between the time-varying exposure and a time
+- an interaction between the time-varying exposure and a time-fixed confounder
+- a quadratic effect of the exposure
+
+
+## Analysis model 1: Interaction between the time-varying exposure and time
+
+For the illustration of MI approaches under analysis model 1 we use the dataset `simdatT1.csv` (downloadable [here](https://raw.githack.com/moreno-betancur/medRCT/master/dat4med.csv)) that was simulated closely following the real data from the Childhood to Adoloscenese Transition Study (CATS).
+
+The dataset consists of the following variables:
+
+c_id: child's ID
+school: Child's school cluster indicator
+age: Child’s age (wave 1) (years) 
+sex: Child's sex
+SES_z: Standardized SES measured by the SEIFA IRSAD (wave 1)
+NAPLAN1_Z: Standardized NAPLAN numeracy score (wave 1) 
+time: wave/time point
+prev_dep: Depressive symptoms (waves 2,4 and 6)
+NAPLAN_Z: Standardized NAPLAN numeracy score (waves 3,5 and 7) 
+prev_sdq: Overall child behaviour reported by SDQ (waves 2,4 and 6)
+
+```{r, echo=FALSE, results='asis'}
+dat<-read.csv("simdatT1.csv",header=TRUE)
+knitr::kable(head(dat[-1],10),row.names=NA)
+```
+
+The time varying variable `prev_dep` and the time-fixed variable `SES_z` are incomplete, while all the other variables are completely observed
+
+### Single-level JM with DI indicators for the higher level clusters and repeated measures imputed in wide format (JM-1L-DI-wide)
+
+### Single-level FCS with DI indicators for the higher level clusters and repeated measures imputed in wide format (FCS-1L-DI-wide)
+
+### Two-level JM for the higher level clusters with repeated measures imputed in wide format (JM-2L-wide)
+
+### Two-level FCS for the higher level clusters with repeated measures imputed in wide format (FCS-2L-wide)
+
+
+
+
+You can enable figure captions by `fig_caption: yes` in YAML:
+
+    output:
+      rmarkdown::html_vignette:
+        fig_caption: yes
+
+Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
+
+## More Examples
+
+You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
+
+
+
+Also a quote using `>`:
+
+> "He who gives up [code] safety for [code] speed deserves neither."
+([via](https://twitter.com/hadleywickham/status/504368538874703872))
