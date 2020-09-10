@@ -34,23 +34,23 @@ For the illustration of MI approaches under analysis model 1 we use the dataset 
 
 The dataset consists of the following variables:
 
-c_id: child's ID
-school: Child's school cluster indicator
-age: Child’s age (wave 1) (years) 
-sex: Child's sex
-SES_z: Standardized SES measured by the SEIFA IRSAD (wave 1)
-NAPLAN1_Z: Standardized NAPLAN numeracy score (wave 1) 
-time: wave/time point
-prev_dep: Depressive symptoms (waves 2,4 and 6)
-NAPLAN_Z: Standardized NAPLAN numeracy score (waves 3,5 and 7) 
-prev_sdq: Overall child behaviour reported by SDQ (waves 2,4 and 6)
+* c_id: child's ID
+* school: Child's school cluster indicator
+* age: Child’s age (wave 1) (years) 
+* sex: Child's sex
+* SES_z: Standardized SES measured by the SEIFA IRSAD (wave 1)
+* NAPLAN1_Z: Standardized NAPLAN numeracy score (wave 1) 
+* time: wave/time point
+* prev_dep: Depressive symptoms (waves 2,4 and 6)
+* NAPLAN_Z: Standardized NAPLAN numeracy score (waves 3,5 and 7) 
+* prev_sdq: Overall child behaviour reported by SDQ (waves 2,4 and 6)
 
 ```{r, echo=FALSE, results='asis'}
 dat<-read.csv("simdatT1.csv",header=TRUE)
 knitr::kable(head(dat[-1],10),row.names=NA)
 ```
 
-The time varying variable `prev_dep` and the time-fixed variable `SES_z` are incomplete, while all the other variables are completely observed
+The time varying variable `prev_dep` and the time-fixed variable `SES_z` are incomplete, while all the other variables are completely observed.
 
 ### Single-level JM with DI indicators for the higher level clusters and repeated measures imputed in wide format (JM-1L-DI-wide)
 
@@ -60,7 +60,12 @@ The time varying variable `prev_dep` and the time-fixed variable `SES_z` are inc
 
 ### Two-level FCS for the higher level clusters with repeated measures imputed in wide format (FCS-2L-wide)
 
+### Two-level SMC-JM for the repeated measures with DI for the higher-level clusters (SMC-JM-2L-DI)
 
+### Two-level SMC-SM for the repeated measures with DI for the higher-level clusters (SMC-SM-2L-DI)
+
+
+## Analysis model 2: Interaction between the time-varying exposure and a time-fixed confounder
 
 
 You can enable figure captions by `fig_caption: yes` in YAML:

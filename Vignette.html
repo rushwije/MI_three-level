@@ -12,7 +12,7 @@
 
 <meta name="author" content="Rushani Wijesuriya" />
 
-<meta name="date" content="2020-09-07" />
+<meta name="date" content="2020-09-09" />
 
 <title>Illustration of multiple imputation approaches for incomplete three-level data: accomodating inetractions and non-linear terms</title>
 
@@ -215,7 +215,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Illustration of multiple imputation approaches for incomplete three-level data: accomodating inetractions and non-linear terms</h1>
 <h4 class="author">Rushani Wijesuriya</h4>
-<h4 class="date">2020-09-07</h4>
+<h4 class="date">2020-09-09</h4>
 
 
 
@@ -233,7 +233,18 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h2>Analysis model 1: Interaction between the time-varying exposure and time</h2>
 <p>For the illustration of MI approaches under analysis model 1 we use the dataset <code>simdatT1.csv</code> (downloadable <a href="https://raw.githack.com/moreno-betancur/medRCT/master/dat4med.csv">here</a>) that was simulated closely following the real data from the Childhood to Adoloscenese Transition Study (CATS).</p>
 <p>The dataset consists of the following variables:</p>
-<p>c_id: child’s ID school: Child’s school cluster indicator age: Child’s age (wave 1) (years) sex: Child’s sex SES_z: Standardized SES measured by the SEIFA IRSAD (wave 1) NAPLAN1_Z: Standardized NAPLAN numeracy score (wave 1) time: wave/time point prev_dep: Depressive symptoms (waves 2,4 and 6) NAPLAN_Z: Standardized NAPLAN numeracy score (waves 3,5 and 7) prev_sdq: Overall child behaviour reported by SDQ (waves 2,4 and 6)</p>
+<ul>
+<li>c_id: child’s ID</li>
+<li>school: Child’s school cluster indicator</li>
+<li>age: Child’s age (wave 1) (years)</li>
+<li>sex: Child’s sex</li>
+<li>SES_z: Standardized SES measured by the SEIFA IRSAD (wave 1)</li>
+<li>NAPLAN1_Z: Standardized NAPLAN numeracy score (wave 1)</li>
+<li>time: wave/time point</li>
+<li>prev_dep: Depressive symptoms (waves 2,4 and 6)</li>
+<li>NAPLAN_Z: Standardized NAPLAN numeracy score (waves 3,5 and 7)</li>
+<li>prev_sdq: Overall child behaviour reported by SDQ (waves 2,4 and 6)</li>
+</ul>
 <table>
 <thead>
 <tr class="header">
@@ -372,7 +383,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 </tr>
 </tbody>
 </table>
-<p>The time varying variable <code>prev_dep</code> and the time-fixed variable <code>SES_z</code> are incomplete, while all the other variables are completely observed</p>
+<p>The time varying variable <code>prev_dep</code> and the time-fixed variable <code>SES_z</code> are incomplete, while all the other variables are completely observed.</p>
 <div id="single-level-jm-with-di-indicators-for-the-higher-level-clusters-and-repeated-measures-imputed-in-wide-format-jm-1l-di-wide" class="section level3">
 <h3>Single-level JM with DI indicators for the higher level clusters and repeated measures imputed in wide format (JM-1L-DI-wide)</h3>
 </div>
@@ -384,6 +395,12 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 </div>
 <div id="two-level-fcs-for-the-higher-level-clusters-with-repeated-measures-imputed-in-wide-format-fcs-2l-wide" class="section level3">
 <h3>Two-level FCS for the higher level clusters with repeated measures imputed in wide format (FCS-2L-wide)</h3>
+</div>
+<div id="two-level-smc-jm-for-the-repeated-measures-with-di-for-the-higher-level-clusters-smc-jm-2l-di" class="section level3">
+<h3>Two-level SMC-JM for the repeated measures with DI for the higher-level clusters (SMC-JM-2L-DI)</h3>
+</div>
+<div id="two-level-smc-sm-for-the-repeated-measures-with-di-for-the-higher-level-clusters-smc-sm-2l-di" class="section level3">
+<h3>Two-level SMC-SM for the repeated measures with DI for the higher-level clusters (SMC-SM-2L-DI)</h3>
 <p>You can enable figure captions by <code>fig_caption: yes</code> in YAML:</p>
 <pre><code>output:
   rmarkdown::html_vignette:
