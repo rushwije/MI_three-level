@@ -13,13 +13,12 @@
 rm(list = ls())
 
 ##load the required packages
-require(lme4)
-require(jomo)
-require(geepack)
-require(mice)
-require(xlsx)
-require(mitml)
-require(utils)
+require(lme4)   #for fitting the lmer model
+require(jomo)   # for single-level and two-level JM and two-level SMC JM
+require(mitml)  # for pooling the results
+require(mice)   #for single and two-levl FCS
+require(xlsx)   #for writing/exporting the results
+require(DataCombine) #for generating the lagged wave variables
 
 ##set working dir to where data is stored
 #setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -98,7 +97,7 @@ for (i in 1:length(data)){
     datw=datw[,names(datw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
                                 "c_age","c_gender","c_dep.2","c_dep.4","c_dep.6",
                                 "c_ses","c_nap1_z","id","simdataw$school")]
-    names(datw)[12]= "school"
+    names(datw)[names(datw) == "simdataw$school"] <- "school"
     
     #3. rename depression variables for reshape
     colnames(datw)[colnames(datw)=="c_dep.2"] <- "prev_dep.3"
@@ -161,7 +160,7 @@ rownames(MVNIslwide_results.ICC)=c("level 3","level 2")
 colnames(MVNIslwide_results.ICC)=c(seq(1:length(data)))
 
 rownames(MVNIslwide_results.CI)=rows
-colnames(MVNIslwide_results.CI)=c(rep(1:length(data), each=2))
+colnames(MVNIslwide_results.CI)=c(rep(1:length(data),each=2))
 
 ##save the results
 write.xlsx(MVNIslwide_results.est,"MVNIslwide_results.est.xlsx")
@@ -590,9 +589,7 @@ for (i in 1:length(data)){
   M<-20
   nburn=500
   NB=10
-  
-  
-  
+
   ##create school dummy indicators
   school_DI=data.frame(model.matrix(simdataL$c_id~as.factor(simdataL$school)-1,
                                     simdataL))
@@ -703,7 +700,7 @@ for (i in 1:length(temp)){
  
   simdataL= data[[i]]
   simdataL$c_id=as.numeric(simdataL$c_id)
-  simdataL <- simdataL[order(simdataL$school,simdataL$C_id),]
+  simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
 
   #create the previous wave deperssion symptoms
   simdataL<- slide(simdataL, Var = "c_dep", GroupVar = "c_id",
@@ -731,8 +728,8 @@ for (i in 1:length(temp)){
   simdataL$school=simdataL$school-1
   
   #model specification
-  iter <-2000 ; burnin <- 1000 ##burn in for 1000 iteration and one imputed dataset is 
-  Nimp <- 20                               ##saved every 100th iteration=20imps 
+  iter <-2000 ; burnin <- 1000 ##burn in for 1000 iteration and one imputed dataset is
+  Nimp <- 20                               ##saved every 100th iteration=20imps
   
   #substantive model formula
   Y_formula <- napscore_z ~prev_dep+wave+prev_dep*wave+c_age+c_ses+c_gender+c_nap1_z+prev_sdq+school+(1|c_id)
