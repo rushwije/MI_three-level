@@ -696,7 +696,7 @@ SMCSMDI_results.RE=matrix(NA,nrow=3,ncol=length(data))
 SMCSMDI_results.ICC=matrix(NA,nrow=2,ncol=length(data))
 SMCSMDI_results.CI=c()
 
-for (i in 1:length(temp)){
+for (i in 1:length(data)){
  
   simdataL= data[[i]]
   simdataL$c_id=as.numeric(simdataL$c_id)
@@ -804,19 +804,19 @@ for (i in 1:length(temp)){
 }
 
 rownames(SMCSMDI_results.est)=rows
-colnames(SMCSMDI_results.est)=c(seq(1:length(temp)))
+colnames(SMCSMDI_results.est)=c(seq(1:length(data)))
 
 rownames(SMCSMDI_results.sd)=rows
-colnames(SMCSMDI_results.sd)=c(seq(1:length(temp)))
+colnames(SMCSMDI_results.sd)=c(seq(1:length(data)))
 
 rownames(SMCSMDI_results.RE)=c("level 3","level 2","level 1")
-colnames(SMCSMDI_results.RE)=c(seq(1:length(temp)))
+colnames(SMCSMDI_results.RE)=c(seq(1:length(data)))
 
 rownames(SMCSMDI_results.ICC)=c("level 3","level 2")
-colnames(SMCSMDI_results.ICC)=c(seq(1:length(temp)))
+colnames(SMCSMDI_results.ICC)=c(seq(1:length(data)))
 
 rownames(SMCSMDI_results.CI)=rows
-colnames(SMCSMDI_results.CI)=c(rep(1:length(temp), each=2))
+colnames(SMCSMDI_results.CI)=c(rep(1:length(data), each=2))
 
 ##save the results
 write.xlsx(SMCSMDI_results.est,"SMCSMDI_results.est.xlsx")
