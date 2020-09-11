@@ -394,7 +394,7 @@ for (i in 1:length(data)){
   }
   
   #fit the analysis of interest on the imputed datasets 
-  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*time+c_age+
+  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+
                                              c_gender+c_nap1_z+c_ses
                                            +(1|school/id), data = d)} )
   
@@ -725,17 +725,17 @@ for (i in 1:length(temp)){
   Conf=confint(MI_est)
   CI[,1]=as.vector(Conf[2:8,1])
   CI[,2]=as.vector(Conf[2:8,2])
-  FCSslwidepassiveall.CI=cbind(FCSslwidepassiveall.CI,CI)
+  FCSslwidepassiveall_results.CI=cbind(FCSslwidepassiveall_results.CI,CI)
   
   #store the estimates
-  FCSslwidepassiveall.est[,i]=MI_est$estimates[2:8,1]
-  FCSslwidepassiveall.sd[,i]=MI_est$estimates[2:8,2]
-  FCSslwidepassiveall.RE[1,i]=sqrt(MI_est$var.comp[2,1])
-  FCSslwidepassiveall.RE[2,i]=sqrt(MI_est$var.comp[1,1])
-  FCSslwidepassiveall.RE[3,i]=sqrt(MI_est$var.comp[3,1])
+  FCSslwidepassiveall_results.est[,i]=MI_est$estimates[2:8,1]
+  FCSslwidepassiveall_results.sd[,i]=MI_est$estimates[2:8,2]
+  FCSslwidepassiveall_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
+  FCSslwidepassiveall_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
+  FCSslwidepassiveall_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
   
-  FCSslwidepassiveall.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
-  FCSslwidepassiveall.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  FCSslwidepassiveall_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  FCSslwidepassiveall_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
 }
 
 rownames(FCSslwidepassiveall_results.est)=rows
@@ -788,7 +788,7 @@ for (i in 1:length(data)){
   simdataw$c_dep.ses.6=simdataw$c_dep.6*simdataw$c_ses
   
   ##Set number of imputations and number of burn-in iterations
-  M<-20
+  M=20
   nburn=1000
   NB=100
   
@@ -1250,9 +1250,9 @@ for (i in 1:length(data)){
   simdataL$c_gender=as.factor(simdataL$c_gender)
   
   ##Set number of imputations and number of burn-in iterations
-  M<-20
-  nburn=500
-  NB=10
+  M=20
+  nburn=1000
+  NB=100
   
   ##create school dummy indicators
   school_DI=data.frame(model.matrix(simdataL$c_id~as.factor(simdataL$school)-1,
@@ -1360,7 +1360,7 @@ SMCSMDI_results.RE=matrix(NA,nrow=3,ncol=length(data))
 SMCSMDI_results.ICC=matrix(NA,nrow=2,ncol=length(data))
 SMCSMDI_results.CI=c()
 
-for (i in 1:length(temp)){
+for (i in 1:length(data)){
   
   simdataL= data[[i]]
   simdataL$c_id=as.numeric(simdataL$c_id)
@@ -1390,7 +1390,7 @@ for (i in 1:length(temp)){
   #model specification
   iter <-2000 ; burnin <- 1000 ##burn in for 1000 iteration and one imputed dataset is
   Nimp <- 20                               ##saved every 100th iteration=20imps
-  
+                      ##saved every 100th iteration=20imps
   #substantive model formula
   Y_formula <- napscore_z ~prev_dep+wave+prev_dep*c_ses+c_age+c_ses+c_gender+c_nap1_z+prev_sdq+school+(1|c_id)
   
@@ -1463,19 +1463,19 @@ for (i in 1:length(temp)){
 }
 
 rownames(SMCSMDI_results.est)=rows
-colnames(SMCSMDI_results.est)=c(seq(1:length(temp)))
+colnames(SMCSMDI_results.est)=c(seq(1:length(data)))
 
 rownames(SMCSMDI_results.sd)=rows
-colnames(SMCSMDI_results.sd)=c(seq(1:length(temp)))
+colnames(SMCSMDI_results.sd)=c(seq(1:length(data)))
 
 rownames(SMCSMDI_results.RE)=c("level 3","level 2","level 1")
 colnames(SMCSMDI_results.RE)=c(seq(1:length(temp)))
 
 rownames(SMCSMDI_results.ICC)=c("level 3","level 2")
-colnames(SMCSMDI_results.ICC)=c(seq(1:length(temp)))
+colnames(SMCSMDI_results.ICC)=c(seq(1:length(data)))
 
 rownames(SMCSMDI_results.CI)=rows
-colnames(SMCSMDI_results.CI)=c(rep(1:length(temp), each=2))
+colnames(SMCSMDI_results.CI)=c(rep(1:length(data), each=2))
 
 ##save the results
 write.xlsx(SMCSMDI_results.est,"SMCSMDI_results.est.xlsx")

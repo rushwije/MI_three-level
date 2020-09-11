@@ -597,7 +597,6 @@ for (i in 1:length(data)){
                                                        "schoo_Ind",40))
   school_DI=school_DI[,1:39]
   
-  
   ##define a dataframe with all variables required
   data_jomo=cbind(simdataL[!names(simdataL)%in%c("child","school")],school_DI)
   
@@ -665,19 +664,19 @@ for (i in 1:length(data)){
 }
 
 rownames(SMCJMDI_results.est)=rows
-colnames(SMCJMDI_results.est)=c(seq(1:length(temp)))
+colnames(SMCJMDI_results.est)=c(seq(1:length(data)))
 
 rownames(SMCJMDI_results.sd)=rows
-colnames(SMCJMDI_results.sd)=c(seq(1:length(temp)))
+colnames(SMCJMDI_results.sd)=c(seq(1:length(data)))
 
 rownames(SMCJMDI_results.RE)=c("level 3","level 2","level 1")
-colnames(SMCJMDI_results.RE)=c(seq(1:length(temp)))
+colnames(SMCJMDI_results.RE)=c(seq(1:length(data)))
 
 rownames(SMCJMDI_results.ICC)=c("level 3","level 2")
-colnames(SMCJMDI_results.ICC)=c(seq(1:length(temp)))
+colnames(SMCJMDI_results.ICC)=c(seq(1:length(data)))
 
 rownames(SMCJMDI_results.CI)=rows
-colnames(SMCJMDI_results.CI)=c(rep(1:length(temp), each=2))
+colnames(SMCJMDI_results.CI)=c(rep(1:length(data), each=2))
 
 ##save the results
 write.xlsx(SMCJMDI_results.est,"SMCJMDI_results.est.xlsx")
