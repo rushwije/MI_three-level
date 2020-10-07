@@ -9,8 +9,21 @@
 #                                                                               #
 #################################################################################
 
+##NOTES for running the MI approaches in this script
+
+#For the following MI approaches the 1000 replications were run in subsets of n replications for each 
+#simulation scenario (number of higher-level clusters x missing data mechanism) for efficiency 
+
+# 1.JM-1L-DI-wide  (n=200)
+# 2. SMC-JM-2L-DI  (n=20)
+# 3. SMC-SM-2L-DI  (n=100)
+
+#For the rest of the approaches the 1000 replications were run in parallel for each simulation scenario 
+
+#inidvidual seeds used for each simulation scenario and paralley run simulations are given as comments
+
 ##clear the workspace
-rm(list = ls())
+# rm(list = ls())
 
 ##load the required packages
 require(lme4)   #for fitting the lmer model
@@ -20,158 +33,16 @@ require(mice)   #for single and two-levl FCS
 require(xlsx)   #for writing/exporting the results
 require(DataCombine) #for generating the lagged wave variables
 
-##set working dir to where data is stored
-#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-
-##load the simulated data 
 data=lapply(list.files(pattern=glob2rx("*.csv")),read.csv)
-
-##############################################################################
-#                      JM-1L-DI-wide                                         #
-##############################################################################
-
-MVNIslwide_results.est=matrix(NA,nrow=7,ncol=length(data))
-MVNIslwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
-MVNIslwide_results.RE=matrix(NA,nrow=3,ncol=length(data))
-MVNIslwide_results.ICC=matrix(NA,nrow=2,ncol=length(data))
-MVNIslwide_results.CI=c()
-
-
-for (i in 1:length(data)){
- 
-  simdataL= data[[i]]
-  simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
-  
-  ##Reshape to wide format
-  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
-                   timevar="wave", direction= "wide")
-  
-  ##remove unwanted variables
-  simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
-                                           "p_sdq.3","p_sdq.5","p_sdq.7","c_dep.3",
-                                           "c_dep.5","c_dep.7")]
-  
-  ##Set number of imputations and burn in and thining intervals 
-  M=20
-  nburn=1000
-  NB=100
-  
-  ##create a dataframe with variables to be imputed
-  myvars <- names(simdataw) %in% c("c_dep.2","c_dep.4","c_dep.6","c_ses") 
-  dataimp=simdataw[myvars]
-  
-  ##create school dummy indicators
-  school_DI=data.frame(model.matrix(simdataw$c_id~as.factor(simdataw$school)-1,
-                                    simdataw))
-  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"), 
-                                                       "schoo_Ind",40))
-  school_DI=school_DI[,1:39]
-  
-  ##create a dataframe with complete variables
-  datacomp= cbind(Intercept=rep(1,nrow(simdataw)),
-                  simdataw[,names(simdataw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
-                                                 "c_age","c_gender",
-                                                 "c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6"
-                  )],
-                  school_DI)
-  
-  ##perform imputations without the random effects (SL imputation)
-  set.seed(2946)
-  imp1<-jomo1con(Y=dataimp, X=datacomp, nimp=M,nburn=nburn,nbetween=NB)
-  
-  # Examine convergence
-  # impCheck<-jomo1con.MCMCchain(Y=dataimp, X=datacomp, nburn=nburn)
-  # plot(c(1:nburn),impCheck$collectbeta[1,1,1:nburn],type="l")
-  
-  ##Analysis
-  mylist=list()
-  
-  for(m in 1:M)
-  {
-    datw<-imp1[imp1$Imputation==m,]
-    
-    #1. attach the school variable and remove school indicator variables
-    datw=cbind(datw,simdataw$school)
-    
-    #2. remove unwanted variables
-    datw=datw[,names(datw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
-                                "c_age","c_gender","c_dep.2","c_dep.4","c_dep.6",
-                                "c_ses","c_nap1_z","id","simdataw$school")]
-    names(datw)[names(datw) == "simdataw$school"] <- "school"
-    
-    #3. rename depression variables for reshape
-    colnames(datw)[colnames(datw)=="c_dep.2"] <- "prev_dep.3"
-    colnames(datw)[colnames(datw)=="c_dep.4"] <- "prev_dep.5"
-    colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
-    
-    #4. Reshape to long
-    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),
-                                    c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="id", 
-                 v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
-  
-    datL <- datL[order(datL$school,datL$id),]    
-    
-    #5. save the dataset in a list
-    mylist[[m]]= datL
-  }
-  
-  #fit the analysis of interest on the imputed datasets 
-  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*time+c_age+
-                                             c_gender+c_nap1_z+c_ses
-                                           +(1|school/id), data = d)} )
-  
-  #combine the estimates 
-  MI_est=testEstimates(mods, var.comp=TRUE)
-  
-  
-  #Compute CIs
-  CI=matrix(NA,7,2)
-  Conf=confint(MI_est)
-  CI[,1]=as.vector(Conf[2:8,1])
-  CI[,2]=as.vector(Conf[2:8,2])
-  MVNIslwide_results.CI=cbind(MVNIslwide_results.CI,CI)
-  
-  
-  #store the estimates
-  MVNIslwide_results.est[,i]=MI_est$estimates[2:8,1]
-  MVNIslwide_results.sd[,i]=MI_est$estimates[2:8,2]
-  MVNIslwide_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
-  MVNIslwide_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
-  MVNIslwide_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
-  
-  
-  MVNIslwide_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
-  MVNIslwide_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
-  
-}
-
-rows=c("prev_dep","time","c_age","c_gender","c_nap1_z","c_ses","interaction")
-
-rownames(MVNIslwide_results.est)=rows
-colnames(MVNIslwide_results.est)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.sd)=rows
-colnames(MVNIslwide_results.sd)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.RE)=c("level 3","level 2","level 1")
-colnames(MVNIslwide_results.RE)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.ICC)=c("level 3","level 2")
-colnames(MVNIslwide_results.ICC)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.CI)=rows
-colnames(MVNIslwide_results.CI)=c(rep(1:length(data),each=2))
-
-##save the results
-write.xlsx(MVNIslwide_results.est,"MVNIslwide_results.est.xlsx")
-write.xlsx(MVNIslwide_results.sd,"MVNIslwide_results.sd.xlsx")
-write.xlsx(MVNIslwide_results.RE,"MVNIslwide_results.RE.xlsx")
-write.xlsx(MVNIslwide_results.CI,"MVNIslwide_results.CI.xlsx")
-write.xlsx(MVNIslwide_results.ICC,"MVNIslwide_results.ICC.xlsx")
 
 ##############################################################################
 #                      FCS-1L-DI-wide                                        #
 ##############################################################################
+
+set.seed(45271) #MAR-CATS, 40 school clsuters
+# set.seed(6774257) #MAR-CATS, 10 school clusters
+# set.seed(81112684) #MAR-inflated, 40 school clusters
+# set.seed(9757010)  #MAR-inflated, 10 school clusters
 
 FCSslwide_results.est=matrix(NA,nrow=7,ncol=length(data))
 FCSslwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -200,7 +71,6 @@ for (i in 1:length(data)){
   simdataw$school=as.factor(simdataw$school)
   
   ##Perform imputations
-  set.seed(2946)
   imp2=mice(data=simdataw[,!names(simdataw)%in%c("c_id","child")],m=M,method="norm",maxit=10)
   
   # Examine convergence
@@ -293,6 +163,11 @@ write.xlsx(FCSslwide_results.CI,"FCSslwide_results.CI.xlsx")
 #                      JM-2L-wide                                            #
 ##############################################################################
 
+set.seed(67809245)#MAR-CATS, 40 school clsuters
+# set.seed(87930271) #MAR-CATS, 10 school clusters
+# set.seed(80012684) #MAR-inflated, 40 school clusters
+# set.seed(4558010)  #MAR-inflated, 10 school clusters
+
 MVNImlwide_results.est=matrix(NA,nrow=7,ncol=length(data))
 MVNImlwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
 MVNImlwide_results.RE=matrix(NA,nrow=3,ncol=length(data))
@@ -332,7 +207,6 @@ for (i in 1:length(temp)){
   datcompRE<-cbind(Intercept=rep(1,nrow(simdataw)))
   
   ##perform imputations without the random effects
-  set.seed(2946)
   imp5<-jomo1rancon(Y=dataimp, X=datacomp, Z=datcompRE, clus=simdataw$school, nimp=M, nburn=nburn,nbetween = NB )
   
   # Examine convergence
@@ -418,6 +292,12 @@ write.xlsx(MVNImlwide_results.ICC,"MVNImlwide_results.ICC.xlsx")
 #                      FCS-2L-wide                                           #
 ##############################################################################
 
+set.seed(7889134)#MAR-CATS, 40 school clsuters
+# set.seed(9017829) #MAR-CATS, 10 school clusters
+# set.seed(9278901) #MAR-inflated, 40 school clusters
+# set.seed(87572801)  #MAR-inflated, 10 school clusters
+
+
 FCSmlwide_results.est=matrix(NA,nrow=7,ncol=length(data))
 FCSmlwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
 FCSmlwide_results.RE=matrix(NA,nrow=3,ncol=length(data))
@@ -462,7 +342,7 @@ for (i in 1:length(data)){
   meth[substr(row.names(pred),1,5)%in%c("c_ses")]="2l.pan"
   
   #perform the imputations
-  imp4<-mice(simdataw,m=M, maxit=10,predictorMatrix=pred, method=meth,seed=2384)
+  imp4<-mice(simdataw,m=M, maxit=10,predictorMatrix=pred, method=meth)
   
   #Examine convergence
   #plot(imp4)
@@ -542,8 +422,222 @@ write.xlsx(FCSmlwide_results.CI,"FCSmlwide_results.CI.xlsx")
 write.xlsx(FCSmlwide_results.ICC,"FCSmlwide_results.ICC.xlsx")
 
 ##############################################################################
+#                      JM-1L-DI-wide                                         #
+##############################################################################
+##commands used for running the simulations in parallel
+args = commandArgs(trailingOnly=TRUE)  #these arguments are passed on from a command line that sends script to a HPC server
+# Alternatively, can comment out and set parameters as below
+
+datnum<-as.numeric(args[1])   
+
+T1 = list.files(pattern="*.csv")
+
+s2=seq(200,1000,by=200)
+s1=s2-199
+
+temp=T1[s1[datnum]:s2[datnum]]
+
+
+#setting random seeds for the parallely run replications
+
+#MAR-CATS, 40 school clsuters
+set.seed(234562)
+seed=sample(1e8,5,replace=F)[datnum]
+
+#MAR-CATS, 10 school clsuters
+# set.seed(6718888)
+# seed=sample.int(1e8,5,replace = F)[datnum] 
+
+#MAR-inflated, 40 school clsuters
+# set.seed(79010093)
+# seed=sample.int(1e8,5,replace = F)[datnum] 
+
+#MAR-inflated, 10 school clsuters
+# set.seed(863331672)
+# seed=sample.int(1e8,5,replace = F)[datnum] 
+
+set.seed(seed)
+
+##load the simulated data 
+data=lapply(T1,read.csv)
+
+MVNIslwide_results.est=matrix(NA,nrow=7,ncol=length(data))
+MVNIslwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
+MVNIslwide_results.RE=matrix(NA,nrow=3,ncol=length(data))
+MVNIslwide_results.ICC=matrix(NA,nrow=2,ncol=length(data))
+MVNIslwide_results.CI=c()
+
+
+for (i in 1:length(data)){
+  
+  simdataL= data[[i]]
+  simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
+  
+  ##Reshape to wide format
+  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
+                   timevar="wave", direction= "wide")
+  
+  ##remove unwanted variables
+  simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
+                                           "p_sdq.3","p_sdq.5","p_sdq.7","c_dep.3",
+                                           "c_dep.5","c_dep.7")]
+  
+  ##Set number of imputations and burn in and thining intervals 
+  M=20
+  nburn=1000
+  NB=100
+  
+  ##create a dataframe with variables to be imputed
+  myvars <- names(simdataw) %in% c("c_dep.2","c_dep.4","c_dep.6","c_ses") 
+  dataimp=simdataw[myvars]
+  
+  ##create school dummy indicators (change to 10 for 10 school clusters)
+  school_DI=data.frame(model.matrix(simdataw$c_id~as.factor(simdataw$school)-1,
+                                    simdataw))
+  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"), 
+                                                       "schoo_Ind",40)) 
+  school_DI=school_DI[,1:39]  #9 DIs if 10 school clusters
+  
+  ##create a dataframe with complete variables
+  datacomp= cbind(Intercept=rep(1,nrow(simdataw)),
+                  simdataw[,names(simdataw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
+                                                 "c_age","c_gender",
+                                                 "c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6"
+                  )],
+                  school_DI)
+  
+  ##perform imputations without the random effects (SL imputation)
+  imp1<-jomo1con(Y=dataimp, X=datacomp, nimp=M,nburn=nburn,nbetween=NB)
+  
+  # Examine convergence
+  # impCheck<-jomo1con.MCMCchain(Y=dataimp, X=datacomp, nburn=nburn)
+  # plot(c(1:nburn),impCheck$collectbeta[1,1,1:nburn],type="l")
+  
+  ##Analysis
+  mylist=list()
+  
+  for(m in 1:M)
+  {
+    datw<-imp1[imp1$Imputation==m,]
+    
+    #1. attach the school variable and remove school indicator variables
+    datw=cbind(datw,simdataw$school)
+    
+    #2. remove unwanted variables
+    datw=datw[,names(datw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
+                                "c_age","c_gender","c_dep.2","c_dep.4","c_dep.6",
+                                "c_ses","c_nap1_z","id","simdataw$school")]
+    names(datw)[names(datw) == "simdataw$school"] <- "school"
+    
+    #3. rename depression variables for reshape
+    colnames(datw)[colnames(datw)=="c_dep.2"] <- "prev_dep.3"
+    colnames(datw)[colnames(datw)=="c_dep.4"] <- "prev_dep.5"
+    colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
+    
+    #4. Reshape to long
+    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),
+                                    c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="id", 
+                 v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
+    
+    datL <- datL[order(datL$school,datL$id),]    
+    
+    #5. save the dataset in a list
+    mylist[[m]]= datL
+  }
+  
+  #fit the analysis of interest on the imputed datasets 
+  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*time+c_age+
+                                             c_gender+c_nap1_z+c_ses
+                                           +(1|school/id), data = d)} )
+  
+  #combine the estimates 
+  MI_est=testEstimates(mods, var.comp=TRUE)
+  
+  
+  #Compute CIs
+  CI=matrix(NA,7,2)
+  Conf=confint(MI_est)
+  CI[,1]=as.vector(Conf[2:8,1])
+  CI[,2]=as.vector(Conf[2:8,2])
+  MVNIslwide_results.CI=cbind(MVNIslwide_results.CI,CI)
+  
+  
+  #store the estimates
+  MVNIslwide_results.est[,i]=MI_est$estimates[2:8,1]
+  MVNIslwide_results.sd[,i]=MI_est$estimates[2:8,2]
+  MVNIslwide_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
+  MVNIslwide_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
+  MVNIslwide_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
+  
+  
+  MVNIslwide_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  MVNIslwide_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  
+}
+
+rows=c("prev_dep","time","c_age","c_gender","c_nap1_z","c_ses","interaction")
+
+rownames(MVNIslwide_results.est)=rows
+colnames(MVNIslwide_results.est)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.sd)=rows
+colnames(MVNIslwide_results.sd)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.RE)=c("level 3","level 2","level 1")
+colnames(MVNIslwide_results.RE)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.ICC)=c("level 3","level 2")
+colnames(MVNIslwide_results.ICC)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.CI)=rows
+colnames(MVNIslwide_results.CI)=c(rep(1:length(data),each=2))
+
+##save the results
+write.xlsx(MVNIslwide_results.est,paste0("MVNIslwide_results",datnum,".est.xlsx"))
+write.xlsx(MVNIslwide_results.sd,paste0("MVNIslwide_results",datnum,".sd.xlsx"))
+write.xlsx(MVNIslwide_results.RE,paste0("MVNIslwide_results",datnum,".RE.xlsx"))
+write.xlsx(MVNIslwide_results.CI,paste0("MVNIslwide_results",datnum,".CI.xlsx"))
+write.xlsx(MVNIslwide_results.ICC,paste0("MVNIslwide_results",datnum,".ICC.xlsx"))
+
+
+##############################################################################
 #                      SMC-JM-2L-DI                                          #
 ##############################################################################
+##commands used for running the simulations in parallel
+args = commandArgs(trailingOnly=TRUE)  #these arguments are passed on from a command line that sends script to a HPC server
+# Alternatively, can comment out and set parameters as below
+
+datnum<-as.numeric(args[1])   
+
+T1 = list.files(pattern="*.csv")
+
+s2=seq(20,1000,by=20)
+s1=s2-19
+
+temp=T1[s1[datnum]:s2[datnum]]
+
+#setting random seeds for the parallely run replications
+
+#MAR-CATS, 40 school clsuters
+set.seed(6718920)
+seed=sample(1e8,50,replace=F)[datnum]
+
+#MAR-CATS, 10 school clsuters
+# set.seed(890015672)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 40 school clsuters
+# set.seed(7902167)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 10 school clsuters
+# set.seed(89995672)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+set.seed(seed)
+
+##load the simulated data 
+data=lapply(T1,read.csv)
 
 SMCJMDI_results.est=matrix(NA,nrow=7,ncol=length(data))
 SMCJMDI_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -590,20 +684,20 @@ for (i in 1:length(data)){
   nburn=500
   NB=10
 
-  ##create school dummy indicators
+  ##create school dummy indicators (change to 10 for 10 school clusters)
   school_DI=data.frame(model.matrix(simdataL$c_id~as.factor(simdataL$school)-1,
                                     simdataL))
   names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"), 
                                                        "schoo_Ind",40))
-  school_DI=school_DI[,1:39]
+  school_DI=school_DI[,1:39] ##9 DIs if 10 school clusters
   
   ##define a dataframe with all variables required
   data_jomo=cbind(simdataL[!names(simdataL)%in%c("child","school")],school_DI)
   
   #specify the levels of each variable in the imputation model 
-  mylevel<-c(2,2,2,2,2,1,1,1,1,rep(2,times=39))
+  mylevel<-c(2,2,2,2,2,1,1,1,1,rep(2,times=39)) ##9 DIs if 10 school clusters
   
-  # formula of the substantive lmer model
+  # formula of the substantive lmer model (change accordingly for 10 school clusters)
   formula<-as.formula(napscore_z ~prev_dep+time+prev_dep*time+c_age+c_gender+c_ses+c_nap1_z+schoo_Ind_1+
                         schoo_Ind_2+schoo_Ind_3+schoo_Ind_4+schoo_Ind_5+schoo_Ind_6+schoo_Ind_7+schoo_Ind_8+
                         schoo_Ind_9+schoo_Ind_10+schoo_Ind_11+schoo_Ind_12+schoo_Ind_13+schoo_Ind_14+schoo_Ind_15+
@@ -613,7 +707,6 @@ for (i in 1:length(data)){
                         schoo_Ind_38+schoo_Ind_39+prev_sdq+(1|c_id))
   
   ##running the imputations
-  set.seed(2946)
   imp5<-jomo.lmer(formula,data_jomo,level=mylevel,nimp=M,nburn=nburn,nbetween = NB)
   
   #Examine convergence
@@ -679,15 +772,49 @@ rownames(SMCJMDI_results.CI)=rows
 colnames(SMCJMDI_results.CI)=c(rep(1:length(data), each=2))
 
 ##save the results
-write.xlsx(SMCJMDI_results.est,"SMCJMDI_results.est.xlsx")
-write.xlsx(SMCJMDI_results.sd,"SMCJMDI_results.sd.xlsx")
-write.xlsx(SMCJMDI_results.RE,"SMCJMDI_results.RE.xlsx")
-write.xlsx(SMCJMDI_results.CI,"SMCJMDI_results.CI.xlsx")
-write.xlsx(SMCJMDI_results.ICC,"SMCJMDI_results.ICC.xlsx")
+write.xlsx(SMCJMDI_results.est,paste0("SMCJMDI_results.est",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.sd,paste0("SMCJMDI_results.sd",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.RE,paste0("SMCJMDI_results.RE",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.CI,paste0("SMCJMDI_results.CI",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.ICC,paste0("SMCJMDI_results.ICC",datnum,".xlsx"))
 
 ##############################################################################
 #                      SMC-SM-2L-DI                                          #
 ##############################################################################
+args = commandArgs(trailingOnly=TRUE)  #these arguments are passed on from a command line that sends script to a HPC server
+# Alternatively, can comment out and set parameters as below
+
+datnum<-as.numeric(args[1])   
+
+T1 = list.files(pattern="*.csv")
+
+s2=seq(100,1000,by=100)
+s1=s2-99
+
+temp=T1[s1[datnum]:s2[datnum]]
+
+#setting random seeds for the parallely run replications
+
+#MAR-CATS, 40 school clsuters
+set.seed(890015672)
+seed=sample(1:100000,10)[datnum]
+
+#MAR-CATS, 10 school clsuters
+# set.seed(10992)
+# seed=sample.int(1e8,10,replace = F)[datnum] 
+
+#MAR-inflated, 40 school clsuters
+# set.seed(79019093)
+# seed=sample.int(1e8,10,replace = F)[datnum] 
+
+#MAR-inflated, 10 school clsuters
+# set.seed(8001672)
+# seed=sample.int(1e8,10,replace = F)[datnum] 
+
+set.seed(seed)
+
+##load the simulated data 
+data=lapply(T1,read.csv)
 
 SMCSMDI_results.est=matrix(NA,nrow=7,ncol=length(data))
 SMCSMDI_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -818,8 +945,8 @@ rownames(SMCSMDI_results.CI)=rows
 colnames(SMCSMDI_results.CI)=c(rep(1:length(data), each=2))
 
 ##save the results
-write.xlsx(SMCSMDI_results.est,"SMCSMDI_results.est.xlsx")
-write.xlsx(SMCSMDI_results.sd,"SMCSMDI_results.sd.xlsx")
-write.xlsx(SMCSMDI_results.RE,"SMCSMDI_results.RE.xlsx")
-write.xlsx(SMCSMDI_results.CI,"SMCSMDI_results.CI.xlsx")
-write.xlsx(SMCSMDI_results.ICC,"SMCSMDI_results.ICC.xlsx")
+write.xlsx(SMCSMDI_results.est,paste0("SMCSMDI_results.est",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.sd,paste0("SMCSMDI_results.sd",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.RE,paste0("SMCSMDI_results.RE",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.CI,paste0("SMCSMDI_results.CI",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.ICC,paste0("SMCSMDI_results.ICC",datnum,".xlsx"))

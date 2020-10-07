@@ -9,6 +9,21 @@
 #                                                                               #
 #################################################################################
 
+
+##NOTES for running the MI approaches in this script
+
+#For the following MI approaches the 1000 replications were run in subsets of n replications for each 
+#simulation scenario (number of higher-level clusters x missing data mechanism) for efficiency 
+
+# 1.JM-1L-DI-wide  (n=200)
+# 2.JM-1L-DI-wide-JAV (n=20)
+# 3.SMC-JM-2L-DI  (n=20)
+# 4. SMC-SM-2L-DI  (n=100)
+
+#For the rest of the approaches the 1000 replications were run in parallel for each simulation scenario 
+
+#inidvidual seeds used for each simulation scenario and paralley run simulations are given as comments
+
 ##clear the workspace
 rm(list = ls())
 
@@ -28,304 +43,13 @@ require(mdmb)     #for two-level SMC-SM
 data=lapply(list.files(pattern=glob2rx("*.csv")),read.csv)
 
 ##############################################################################
-#                      JM-1L-DI-wide                                         #
-##############################################################################
-
-MVNIslwide_results.est=matrix(NA,nrow=7,ncol=length(data))
-MVNIslwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
-MVNIslwide_results.RE=matrix(NA,nrow=3,ncol=length(data))
-MVNIslwide_results.ICC=matrix(NA,nrow=2,ncol=length(data))
-MVNIslwide_results.CI=c()
-
-
-for (i in 1:length(data)){
-  
-  simdataL= data[[i]]
-  simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
-  
-  ##Reshape to wide format
-  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
-                   timevar="wave", direction= "wide")
-  
-  ##remove unwanted variables
-  simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
-                                           "p_sdq.3","p_sdq.5","p_sdq.7","c_dep.3",
-                                           "c_dep.5","c_dep.7")]
-  
-  ##Set number of imputations and burn in and thining intervals 
-  M=20
-  nburn=1000
-  NB=100
-  
-  ##create a dataframe with variables to be imputed
-  myvars <- names(simdataw) %in% c("c_dep.2","c_dep.4","c_dep.6","c_ses") 
-  dataimp=simdataw[myvars]
-  
-  ##create school dummy indicators
-  school_DI=data.frame(model.matrix(simdataw$c_id~as.factor(simdataw$school)-1,
-                                    simdataw))
-  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"), 
-                                                       "schoo_Ind",40))
-  school_DI=school_DI[,1:39]
-  
-  ##create a dataframe with complete variables
-  datacomp= cbind(Intercept=rep(1,nrow(simdataw)),
-                  simdataw[,names(simdataw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
-                                                 "c_age","c_gender",
-                                                 "c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6"
-                  )],
-                  school_DI)
-  
-  ##perform imputations without the random effects (SL imputation)
-  set.seed(2946)
-  imp1<-jomo1con(Y=dataimp, X=datacomp, nimp=M,nburn=nburn,nbetween=NB)
-  
-  # Examine convergence
-  # impCheck<-jomo1con.MCMCchain(Y=dataimp, X=datacomp, nburn=nburn)
-  # plot(c(1:nburn),impCheck$collectbeta[1,1,1:nburn],type="l")
-  
-  ##Analysis
-  mylist=list()
-  
-  for(m in 1:M)
-  {
-    datw<-imp1[imp1$Imputation==m,]
-    
-    #1. attach the school variable and remove school indicator variables
-    datw=cbind(datw,simdataw$school)
-    
-    #2. remove unwanted variables
-    datw=datw[,names(datw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
-                                "c_age","c_gender","c_dep.2","c_dep.4","c_dep.6",
-                                "c_ses","c_nap1_z","id","simdataw$school")]
-  
-    names(datw)[names(datw) == "simdataw$school"] <- "school"
-    
-    #3. rename depression variables for reshape
-    colnames(datw)[colnames(datw)=="c_dep.2"] <- "prev_dep.3"
-    colnames(datw)[colnames(datw)=="c_dep.4"] <- "prev_dep.5"
-    colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
-    
-    #4. Reshape to long
-    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),
-                                    c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="id", 
-                 v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
-    
-    datL <- datL[order(datL$school,datL$id),]    
-    
-    #5. save the dataset in a list
-    mylist[[m]]= datL
-  }
-  
-  #fit the analysis of interest on the imputed datasets 
-  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+
-                                             c_gender+c_nap1_z+c_ses
-                                           +(1|school/id), data = d)} )
-  
-  #combine the estimates 
-  MI_est=testEstimates(mods, var.comp=TRUE)
-  
-  
-  #Compute CIs
-  CI=matrix(NA,7,2)
-  Conf=confint(MI_est)
-  CI[,1]=as.vector(Conf[2:8,1])
-  CI[,2]=as.vector(Conf[2:8,2])
-  MVNIslwide_results.CI=cbind(MVNIslwide_results.CI,CI)
-  
-  
-  #store the estimates
-  MVNIslwide_results.est[,i]=MI_est$estimates[2:8,1]
-  MVNIslwide_results.sd[,i]=MI_est$estimates[2:8,2]
-  MVNIslwide_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
-  MVNIslwide_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
-  MVNIslwide_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
-  
-  
-  MVNIslwide_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
-  MVNIslwide_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
-  
-}
-
-rows=c("prev_dep","time","c_age","c_gender","c_nap1_z","c_ses","interaction")
-
-rownames(MVNIslwide_results.est)=rows
-colnames(MVNIslwide_results.est)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.sd)=rows
-colnames(MVNIslwide_results.sd)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.RE)=c("level 3","level 2","level 1")
-colnames(MVNIslwide_results.RE)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.ICC)=c("level 3","level 2")
-colnames(MVNIslwide_results.ICC)=c(seq(1:length(data)))
-
-rownames(MVNIslwide_results.CI)=rows
-colnames(MVNIslwide_results.CI)=c(rep(1:length(data),each=2))
-
-##save the results
-write.xlsx(MVNIslwide_results.est,"MVNIslwide_results.est.xlsx")
-write.xlsx(MVNIslwide_results.sd,"MVNIslwide_results.sd.xlsx")
-write.xlsx(MVNIslwide_results.RE,"MVNIslwide_results.RE.xlsx")
-write.xlsx(MVNIslwide_results.CI,"MVNIslwide_results.CI.xlsx")
-write.xlsx(MVNIslwide_results.ICC,"MVNIslwide_results.ICC.xlsx")
-
-##############################################################################
-#                      JM-1L-DI-wide-JAV                                     #
-##############################################################################
-
-MVNIslwideJAV_results.est=matrix(NA,nrow=7,ncol=length(data))
-MVNIslwideJAV_results.sd=matrix(NA,nrow=7,ncol=length(data))
-MVNIslwideJAV_results.RE=matrix(NA,nrow=3,ncol=length(data))
-MVNIslwideJAV_results.ICC=matrix(NA,nrow=2,ncol=length(data))
-MVNIslwideJAV_results.CI=c()
-
-for (i in 1:length(data)){
-  
-  simdataL= data[[i]]
-  simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
- 
-  ##Reshape to wide format
-  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
-                   timevar="wave", direction= "wide")
-  
-  ##remove unwanted variables
-  simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
-                                           "p_sdq.3","p_sdq.5","p_sdq.7","c_dep.3","c_dep.5","c_dep.7")]
-  
-  ##Set number of imputations 
-  M=20
-  nburn=1000
-  NB=100
-
-  ##generate the interaction terms
-  simdataw$c_dep.ses.2=simdataw$c_dep.2*simdataw$c_ses
-  simdataw$c_dep.ses.4=simdataw$c_dep.4*simdataw$c_ses
-  simdataw$c_dep.ses.6=simdataw$c_dep.6*simdataw$c_ses
-  
-  ##create a dataframe with variables to be imputed
-  myvars <- names(simdataw) %in% c("c_dep.2","c_dep.4","c_dep.6","c_ses","c_dep.ses.2","c_dep.ses.4","c_dep.ses.6") 
-  dataimp=simdataw[myvars]
-  
-  
-  ##create school dummy indicators
-  school_DI=data.frame(model.matrix(simdataw$c_id~as.factor(simdataw$school)-1,
-                                    simdataw))
-  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"), 
-                                                       "schoo_Ind",40))
-  school_DI=school_DI[,1:39]
-  
-  ##create a dataframe with complete variables
-  datacomp= cbind(Intercept=rep(1,nrow(simdataw)),
-                  simdataw[,names(simdataw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
-                                                 "c_age","c_gender",
-                                                 "c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6"
-                  )],
-                  school_DI)
-  
-  ##perform imputations without the random effects (SL imputation)
-  set.seed(2946)
-  imp1<-jomo1con(Y=dataimp, X=datacomp, nimp=M,nburn=nburn,nbetween=NB)
-  
-  #Examine convergence
-  # impCheck<-jomo1con.MCMCchain(Y=dataimp, X=datacomp, nburn=nburn)
-  # plot(c(1:nburn),impCheck$collectbeta[1,1,1:nburn],type="l")
-  
-  ##Analysis
-  mylist=list()
-  
-  for(m in 1:M)
-  {
-    datw<-imp1[imp1$Imputation==m,]
-    
-    #1. attach the school variable and remove school indicator variables
-    datw=cbind(datw,simdataw$school)
-  
-    #2. remove unwanted variables
-    datw=datw[,names(datw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
-                                "c_age","c_gender","c_dep.2","c_dep.4","c_dep.6",
-                                "c_dep.ses.2","c_dep.ses.4","c_dep.ses.6",
-                                "c_ses","c_nap1_z","id","simdataw$school")]
-    colnames(datw)[colnames(datw)=="simdataw$school"] <- "school"
-    
-    #3. rename depression variables for reshape
-    colnames(datw)[colnames(datw)=="c_dep.2"] <- "prev_dep.3"
-    colnames(datw)[colnames(datw)=="c_dep.4"] <- "prev_dep.5"
-    colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
-    
-    colnames(datw)[colnames(datw)=="c_dep.ses.2"] <- "inter.3"
-    colnames(datw)[colnames(datw)=="c_dep.ses.4"] <- "inter.5"
-    colnames(datw)[colnames(datw)=="c_dep.ses.6"] <- "inter.7"
-    
-    #4. Reshape to long
-    
-    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3",
-                                                                                "napscore_z.5","napscore_z.7"),
-                                    c("inter.3","inter.5","inter.7"))
-                 ,idvar="id", 
-                 v.names=c("prev_dep","napscore_z","inter"), times=c(3,5,7),direction= "long")
-    
-    
-    
-    datL <- datL[order(datL$school,datL$id),]    
-    
-    #5. save the dataset in a list
-    mylist[[m]]= datL
-  }
-  
-  #fit the analysis of interest on the imputed datasets 
-  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+c_age+
-                                             c_gender+c_nap1_z+c_ses+inter
-                                           +(1|school/id), data = d)} )
-  
-  #combine the estimates 
-  MI_est=testEstimates(mods, var.comp=TRUE)
-  
-  #Compute CIs
-  CI=matrix(NA,7,2)
-  Conf=confint(MI_est)
-  CI[,1]=as.vector(Conf[2:8,1])
-  CI[,2]=as.vector(Conf[2:8,2])
-  MVNIslwideJAV_results.CI=cbind(MVNIslwideJAV_results.CI,CI)
-  
-  #store the estimates
-  MVNIslwideJAV_results.est[,i]=MI_est$estimates[2:8,1]
-  MVNIslwideJAV_results.sd[,i]=MI_est$estimates[2:8,2]
-  MVNIslwideJAV_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
-  MVNIslwideJAV_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
-  MVNIslwideJAV_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
-  
-  MVNIslwideJAV_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
-  MVNIslwideJAV_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
-
-}
-
-rownames(MVNIslwideJAV_results.est)=rows
-colnames(MVNIslwideJAV_results.est)=c(seq(1:length(data)))
-
-rownames(MVNIslwideJAV_results.sd)=rows
-colnames(MVNIslwideJAV_results.sd)=c(seq(1:length(data)))
-
-rownames(MVNIslwideJAV_results.RE)=c("level 3","level 2","level 1")
-colnames(MVNIslwideJAV_results.RE)=c(seq(1:length(data)))
-
-rownames(MVNIslwideJAV_results.ICC)=c("level 3","level 2")
-colnames(MVNIslwideJAV_results.ICC)=c(seq(1:length(data)))
-
-rownames(MVNIslwideJAV_results.CI)=rows
-colnames(MVNIslwideJAV_results.CI)=c(rep(1:length(data),each=2))
-
-##save the results
-write.xlsx(MVNIslwideJAV_results.est,"MVNIslwideJAV_results.est.xlsx")
-write.xlsx(MVNIslwideJAV_results.sd,"MVNIslwideJAV_results.sd.xlsx")
-write.xlsx(MVNIslwideJAV_results.RE,"MVNIslwideJAV_results.RE.xlsx")
-write.xlsx(MVNIslwideJAV_results.CI,"MVNIslwideJAV_results.CI.xlsx")
-write.xlsx(MVNIslwideJAV_results.ICC,"MVNIslwideJAV_results.ICC.xlsx")
-
-##############################################################################
 #                      FCS-1L-DI-wide                                        #
 ##############################################################################
+
+set.seed(7309132) #MAR-CATS, 40 school clsuters
+# set.seed(4268089) #MAR-CATS, 10 school clusters
+# set.seed(7355132) #MAR-inflated, 40 school clusters
+# set.seed(4294089)  #MAR-inflated, 10 school clusters
 
 FCSslwide_results.est=matrix(NA,nrow=7,ncol=length(data))
 FCSslwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -339,8 +63,7 @@ for (i in 1:length(data)){
   simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
   
   ##Reshape to wide format
-  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
-                   timevar="wave", direction= "wide")
+  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id",timevar="wave", direction= "wide")
   
   ##remove unwanted variables
   simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
@@ -354,7 +77,6 @@ for (i in 1:length(data)){
   simdataw$school=as.factor(simdataw$school)
   
   ##Perform imputations
-  set.seed(2946)
   imp2=mice(data=simdataw[,!names(simdataw)%in%c("c_id","child")],m=M,method="norm",maxit=10)
   
   # Examine convergence
@@ -380,7 +102,6 @@ for (i in 1:length(data)){
     colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
     
     #4. Reshape to long
-    
     datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),
                                     c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="id", 
                  v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
@@ -397,7 +118,6 @@ for (i in 1:length(data)){
   mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+
                                              c_gender+c_nap1_z+c_ses
                                            +(1|school/id), data = d)} )
-  
   #combine the estimates 
   MI_est=testEstimates(mods, var.comp=TRUE)
   
@@ -445,6 +165,10 @@ write.xlsx(FCSslwide_results.CI,"FCSslwide_results.CI.xlsx")
 ##############################################################################
 #                      FCS-1L-DI-wide-Passive_c                              #
 ##############################################################################
+set.seed(8309132) #MAR-CATS, 40 school clsuters
+# set.seed(99802146) #MAR-CATS, 10 school clusters
+# set.seed(36825551) #MAR-inflated, 40 school clusters
+# set.seed(56332146)  #MAR-inflated, 10 school clusters
 
 FCSslwidepassivec_results.est=matrix(NA,nrow=7,ncol=length(data))
 FCSslwidepassivec_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -458,8 +182,7 @@ for (i in 1:length(data)){
   simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
  
   ##Reshape to wide format
-  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
-                   timevar="wave", direction= "wide")
+  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id",timevar="wave", direction= "wide")
   
   ##remove unwanted variables
   simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
@@ -512,11 +235,9 @@ for (i in 1:length(data)){
   
   ##visit sequence #updates the derived variables that depend on the target variable 
   #(defines the order in which the variables are to be imputed)
-  visit<-c("c_ses","Nap3.SES","Nap5.SES","Nap7.SES",
-           "c_dep.2","Dep2.Nap3","c_dep.4","Dep4.Nap5","c_dep.6","Dep6.Nap7")
+  visit<-c("c_ses","Nap3.SES","Nap5.SES","Nap7.SES","c_dep.2","Dep2.Nap3","c_dep.4","Dep4.Nap5","c_dep.6","Dep6.Nap7")
   
   ##Perform imputations
-  set.seed(2946)
   imp2=mice(data=simdataw,m=M,predictorMatrix = pred,method=meth,visit=visit,maxit=10,allow.na=TRUE)
   
   #Examine convergence
@@ -527,7 +248,6 @@ for (i in 1:length(data)){
   
   for(m in 1:M)
   {
-    
     #extract the mth imputed dataset
     datw<-complete(imp2,m)
     
@@ -542,8 +262,8 @@ for (i in 1:length(data)){
     colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
     
     #Reshape to long
-    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3",
-                                                                                "napscore_z.5","napscore_z.7")),idvar="id", 
+    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),
+                                    c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="id", 
                  v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
     
     datL <- datL[order(datL$id),]    
@@ -556,7 +276,6 @@ for (i in 1:length(data)){
   mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+
                                              c_gender+c_nap1_z+c_ses
                                            +(1|school/c_id), data = d)} )
-  
   #combine the estimates 
   MI_est=testEstimates(mods, var.comp=TRUE)
   
@@ -604,6 +323,10 @@ write.xlsx(FCSslwidepassivec_results.CI,"FCSslwidepassivec_results.CI.xlsx")
 ##############################################################################
 #                      FCS-1L-DI-wide-Passive_all                            #
 ##############################################################################
+set.seed(9309132) #MAR-CATS, 40 school clsuters
+# set.seed(9036146) #MAR-CATS, 10 school clusters
+# set.seed(89244178) #MAR-inflated, 40 school clusters
+# set.seed(9116146)  #MAR-inflated, 10 school clusters
 
 FCSslwidepassiveall_results.est=matrix(NA,nrow=7,ncol=length(data))
 FCSslwidepassiveall_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -630,8 +353,7 @@ for (i in 1:length(temp)){
   simdataw$school=as.factor(simdataw$school)
   
   ##make new variables for the product terms
-  simdataw=data.frame(simdataw,Nap3.SES=NA,Nap5.SES=NA,Nap7.SES=NA,Dep2.Nap3=NA,
-                      Dep4.Nap5=NA,Dep6.Nap7=NA)
+  simdataw=data.frame(simdataw,Nap3.SES=NA,Nap5.SES=NA,Nap7.SES=NA,Dep2.Nap3=NA,Dep4.Nap5=NA,Dep6.Nap7=NA)
   
   ##specify the predictor matrix
   pred=mice::make.predictorMatrix(simdataw)
@@ -672,11 +394,9 @@ for (i in 1:length(temp)){
   
   ##visit sequence #updates the derived variables that depend on the target variable 
   #(defines the order in which the variables are to be imputed)
-  visit<-c("c_ses","Nap3.SES","Nap5.SES","Nap7.SES",
-           "c_dep.2","Dep2.Nap3","c_dep.4","Dep4.Nap5","c_dep.6","Dep6.Nap7")
+  visit<-c("c_ses","Nap3.SES","Nap5.SES","Nap7.SES","c_dep.2","Dep2.Nap3","c_dep.4","Dep4.Nap5","c_dep.6","Dep6.Nap7")
   
   ##Perform imputations
-  set.seed(2946)
   imp2=mice(data=simdataw,m=M,predictorMatrix = pred,method=meth,visit=visit,maxit=10,allow.na=TRUE)
   
   #Examine convergence
@@ -687,7 +407,6 @@ for (i in 1:length(temp)){
   
   for(m in 1:M)
   {
-    
     #extract the mth imputed dataset
     datw<-complete(imp2,m)
     
@@ -714,7 +433,7 @@ for (i in 1:length(temp)){
   
   #fit the analysis of interest on the imputed datasets 
   mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+
-                                             c_gender+c_nap1_z+c_ses
+                                            c_gender+c_nap1_z+c_ses
                                            +(1|school/c_id), data = d)} )
   
   #combine the estimates 
@@ -764,6 +483,11 @@ write.xlsx(FCSslwidepassiveall_results.CI,"FCSslwidepassiveall_results.CI.xlsx")
 #                      JM-2L-wide-JAV                                        #
 ##############################################################################
 
+set.seed(9946) #MAR-CATS, 40 school clsuters
+# set.seed(66723418) #MAR-CATS, 10 school clusters
+# set.seed(89201784) #MAR-inflated, 40 school clusters
+# set.seed(67256179)  #MAR-inflated, 10 school clusters
+
 MVNImlwideJAV_results.est=matrix(NA,nrow=7,ncol=length(data))
 MVNImlwideJAV_results.sd=matrix(NA,nrow=7,ncol=length(data))
 MVNImlwideJAV_results.RE=matrix(NA,nrow=3,ncol=length(data))
@@ -806,9 +530,7 @@ for (i in 1:length(data)){
   # Create a data frame  with column of 1's for random intercept
   datcompRE<-cbind(Intercept=rep(1,nrow(simdataw)))
   
-  
   ##perform imputations without the random effects
-  set.seed(2946)
   imp5<-jomo1rancon(Y=dataimp, X=datacomp, Z=datcompRE, clus=simdataw$school, nimp=M, nburn=nburn,nbetween = NB )
  
    #check convergence
@@ -834,11 +556,9 @@ for (i in 1:length(data)){
     colnames(imputed)[colnames(imputed)=="c_dep.ses.6"] <- "inter.7"
     
     #reshape to long format
-    datL=reshape(imputed,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3",
-                                                                                   "napscore_z.5","napscore_z.7"),
+    datL=reshape(imputed,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3","napscore_z.5","napscore_z.7"),
                                        c("inter.3","inter.5","inter.7")),idvar="id", 
                  v.names=c("prev_dep","napscore_z","inter"), times=c(3,5,7),direction= "long")
-    
     
     datL <- datL[order(datL$clus,datL$id),]
     
@@ -848,8 +568,7 @@ for (i in 1:length(data)){
   
   
   #fit the analysis of interest on the imputed datasets 
-  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+c_age+
-                                             c_gender+c_nap1_z+c_ses+inter
+  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+c_age+c_gender+c_nap1_z+c_ses+inter
                                            +(1|clus/id), data = d)} )
   
   #combine the estimates 
@@ -898,6 +617,10 @@ write.xlsx(MVNImlwideJAV_results.ICC,"MVNImlwideJAV_results.ICC.xlsx")
 ##############################################################################
 #                      FCS-2L-wide-Passive_c                                 #
 ##############################################################################
+set.seed(9989149) #MAR-CATS, 40 school clsuters
+# set.seed(2135819) #MAR-CATS, 10 school clusters
+# set.seed(42681899) #MAR-inflated, 40 school clusters
+# set.seed(78291739)  #MAR-inflated, 10 school clusters
 
 FCSmlwidepassivec_results.est=matrix(NA,nrow=7,ncol=length(data))
 FCSmlwidepassivec_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -910,8 +633,7 @@ for (i in 1:length(data)){
   simdataL= data[[i]]
   simdataL <- simdataL[order(simdataL$school,simdataL$child),]
   ##Reshape to wide format
-  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
-                   timevar="wave", direction= "wide")
+  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id",timevar="wave", direction= "wide")
   
   ##remove unwanted variables
   simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
@@ -989,8 +711,7 @@ for (i in 1:length(data)){
     colnames(imputed)[colnames(imputed)=="c_dep.6"] <- "prev_dep.7"
     
     #reshape to long format
-    datL=reshape(imputed,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3",
-                                                                                   "napscore_z.5","napscore_z.7")),idvar="c_id", 
+    datL=reshape(imputed,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="c_id", 
                  v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
     
     datL <- datL[order(datL$school,datL$c_id),]
@@ -1013,7 +734,6 @@ for (i in 1:length(data)){
   FCSmlwidepassivec_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
   FCSmlwidepassivec_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
   FCSmlwidepassivec_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
-  
   
   FCSmlwidepassivec_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
   FCSmlwidepassivec_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
@@ -1053,6 +773,11 @@ write.xlsx(FCSmlwidepassivec_results.ICC,"FCSmlwidepassivec_results.ICC.xlsx")
 #                      FCS-2L-wide-Passive_all                               #
 ##############################################################################
 
+set.seed(19092020) #MAR-CATS, 40 school clsuters
+# set.seed(79023216) #MAR-CATS, 10 school clusters
+# set.seed(19097720) #MAR-inflated, 40 school clusters
+# set.seed(79673216)  #MAR-inflated, 10 school clusters
+
 FCSmlwidepassiveall_results.est=matrix(NA,nrow=7,ncol=length(data))
 FCSmlwidepassiveall_results.sd=matrix(NA,nrow=7,ncol=length(data))
 FCSmlwidepassiveall_results.RE=matrix(NA,nrow=3,ncol=length(data))
@@ -1065,14 +790,11 @@ for (i in 1:length(data)){
   simdataL <- simdataL[order(simdataL$school,simdataL$child),]
   
   ##Reshape to wide format
-  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id", 
-                   timevar="wave", direction= "wide")
+  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id",timevar="wave", direction= "wide")
   
   ##remove unwanted variables
   simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
                                            "p_sdq.3","p_sdq.5","p_sdq.7","c_dep.3","c_dep.5","c_dep.7","child")]
-  
-  ######Multilevel FCS with JAV for naplan scores###################
   
   ##make new variables for the product terms
   simdataw=data.frame(simdataw,Nap3.SES=NA,Nap5.SES=NA,Nap7.SES=NA,Dep2.Nap3=NA,
@@ -1118,8 +840,7 @@ for (i in 1:length(data)){
   
   ##visit sequence #updates the derived variables that depend on the target variable 
   #(defines the order in which the variables are to be imputed)
-  visit<-c("c_ses","Nap3.SES","Nap5.SES","Nap7.SES",
-           "c_dep.2","Dep2.Nap3","c_dep.4","Dep4.Nap5","c_dep.6","Dep6.Nap7")
+  visit<-c("c_ses","Nap3.SES","Nap5.SES","Nap7.SES","c_dep.2","Dep2.Nap3","c_dep.4","Dep4.Nap5","c_dep.6","Dep6.Nap7")
   
   ##set the number of imputations and iterations
   M=20
@@ -1146,8 +867,7 @@ for (i in 1:length(data)){
     colnames(imputed)[colnames(imputed)=="c_dep.6"] <- "prev_dep.7"
    
      #reshape to long format
-    datL=reshape(imputed,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3",
-                                                                                   "napscore_z.5","napscore_z.7")),idvar="c_id", 
+    datL=reshape(imputed,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="c_id", 
                  v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
     
     datL <- datL[order(datL$school,datL$c_id),]
@@ -1206,8 +926,383 @@ write.xlsx(FCSmlwidepassiveall_results.CI,"FCSmlwidepassiveall_results.CI.xlsx")
 write.xlsx(FCSmlwidepassiveall_results.ICC,"FCSmlwidepassiveall_results.ICC.xlsx")
 
 ##############################################################################
+#                      JM-1L-DI-wide                                         #
+##############################################################################
+##commands used for running the simulations in parallel
+args = commandArgs(trailingOnly=TRUE)  #these arguments are passed on from a command line that sends script to a HPC server
+# Alternatively, can comment out and set parameters as below
+datnum<-as.numeric(args[1])   
+
+T1 = list.files(pattern="*.csv")
+
+s2=seq(200,1000,by=200)
+s1=s2-199
+
+temp=T1[s1[datnum]:s2[datnum]]
+
+#setting random seeds for the parallely run replications
+
+#MAR-CATS, 40 school clsuters
+set.seed(9027143)
+seed=sample(1e8,5,replace=F)[datnum]
+
+#MAR-CATS, 10 school clsuters
+# set.seed(1194133)
+# seed=sample.int(1e8,5,replace = F)[datnum] 
+
+#MAR-inflated, 40 school clsuters
+# set.seed(9028843)
+# seed=sample.int(1e8,5,replace = F)[datnum] 
+
+#MAR-inflated, 10 school clsuters
+# set.seed(1197833)
+# seed=sample.int(1e8,5,replace = F)[datnum] 
+
+set.seed(seed)
+
+##load the simulated data 
+data=lapply(T1,read.csv)
+
+MVNIslwide_results.est=matrix(NA,nrow=7,ncol=length(data))
+MVNIslwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
+MVNIslwide_results.RE=matrix(NA,nrow=3,ncol=length(data))
+MVNIslwide_results.ICC=matrix(NA,nrow=2,ncol=length(data))
+MVNIslwide_results.CI=c()
+
+for (i in 1:length(data)){
+  
+  simdataL= data[[i]]
+  simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
+  
+  ##Reshape to wide format
+  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id",timevar="wave", direction= "wide")
+  
+  ##remove unwanted variables
+  simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
+                                           "p_sdq.3","p_sdq.5","p_sdq.7","c_dep.3",
+                                           "c_dep.5","c_dep.7")]
+  
+  ##Set number of imputations and burn in and thining intervals 
+  M=20
+  nburn=1000
+  NB=100
+  
+  ##create a dataframe with variables to be imputed
+  myvars <- names(simdataw) %in% c("c_dep.2","c_dep.4","c_dep.6","c_ses") 
+  dataimp=simdataw[myvars]
+  
+  ##create school dummy indicators (edit accordingly for 10 school clusters)
+  school_DI=data.frame(model.matrix(simdataw$c_id~as.factor(simdataw$school)-1,
+                                    simdataw))
+  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"), 
+                                                       "schoo_Ind",40))
+  school_DI=school_DI[,1:39]
+  
+  ##create a dataframe with complete variables
+  datacomp= cbind(Intercept=rep(1,nrow(simdataw)),
+                  simdataw[,names(simdataw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
+                                                 "c_age","c_gender","c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6")],school_DI)
+  
+  ##perform imputations without the random effects (SL imputation)
+  imp1<-jomo1con(Y=dataimp, X=datacomp, nimp=M,nburn=nburn,nbetween=NB)
+  
+  # Examine convergence
+  # impCheck<-jomo1con.MCMCchain(Y=dataimp, X=datacomp, nburn=nburn)
+  # plot(c(1:nburn),impCheck$collectbeta[1,1,1:nburn],type="l")
+  
+  ##Analysis
+  mylist=list()
+  
+  for(m in 1:M)
+  {
+    datw<-imp1[imp1$Imputation==m,]
+    
+    #1. attach the school variable and remove school indicator variables
+    datw=cbind(datw,simdataw$school)
+    
+    #2. remove unwanted variables
+    datw=datw[,names(datw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
+                                "c_age","c_gender","c_dep.2","c_dep.4","c_dep.6",
+                                "c_ses","c_nap1_z","id","simdataw$school")]
+    
+    names(datw)[names(datw) == "simdataw$school"] <- "school"
+    
+    #3. rename depression variables for reshape
+    colnames(datw)[colnames(datw)=="c_dep.2"] <- "prev_dep.3"
+    colnames(datw)[colnames(datw)=="c_dep.4"] <- "prev_dep.5"
+    colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
+    
+    #4. Reshape to long
+    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),
+                                    c("napscore_z.3","napscore_z.5","napscore_z.7")),idvar="id", 
+                 v.names=c("prev_dep","napscore_z"), times=c(3,5,7),direction= "long")
+    
+    datL <- datL[order(datL$school,datL$id),]    
+    
+    #5. save the dataset in a list
+    mylist[[m]]= datL
+  }
+  
+  #fit the analysis of interest on the imputed datasets 
+  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+
+                                             c_gender+c_nap1_z+c_ses
+                                           +(1|school/id), data = d)} )
+  
+  #combine the estimates 
+  MI_est=testEstimates(mods, var.comp=TRUE)
+  
+  
+  #Compute CIs
+  CI=matrix(NA,7,2)
+  Conf=confint(MI_est)
+  CI[,1]=as.vector(Conf[2:8,1])
+  CI[,2]=as.vector(Conf[2:8,2])
+  MVNIslwide_results.CI=cbind(MVNIslwide_results.CI,CI)
+  
+  #store the estimates
+  MVNIslwide_results.est[,i]=MI_est$estimates[2:8,1]
+  MVNIslwide_results.sd[,i]=MI_est$estimates[2:8,2]
+  MVNIslwide_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
+  MVNIslwide_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
+  MVNIslwide_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
+  
+  MVNIslwide_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  MVNIslwide_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  
+}
+
+rows=c("prev_dep","time","c_age","c_gender","c_nap1_z","c_ses","interaction")
+
+rownames(MVNIslwide_results.est)=rows
+colnames(MVNIslwide_results.est)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.sd)=rows
+colnames(MVNIslwide_results.sd)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.RE)=c("level 3","level 2","level 1")
+colnames(MVNIslwide_results.RE)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.ICC)=c("level 3","level 2")
+colnames(MVNIslwide_results.ICC)=c(seq(1:length(data)))
+
+rownames(MVNIslwide_results.CI)=rows
+colnames(MVNIslwide_results.CI)=c(rep(1:length(data),each=2))
+
+##save the results
+write.xlsx(MVNIslwide_results.est,paste0("MVNIslwide_results.est",datnum,".xlsx"))
+write.xlsx(MVNIslwide_results.sd,paste0("MVNIslwide_results.sd",datnum,".xlsx"))
+write.xlsx(MVNIslwide_results.RE,paste0("MVNIslwide_results.RE",datnum,".xlsx"))
+write.xlsx(MVNIslwide_results.CI,paste0("MVNIslwide_results.CI",datnum,".xlsx"))
+write.xlsx(MVNIslwide_results.ICC,paste0("MVNIslwide_results.ICC",datnum,".xlsx"))
+
+##############################################################################
+#                      JM-1L-DI-wide-JAV                                     #
+##############################################################################
+##commands used for running the simulations  in parallel
+args = commandArgs(trailingOnly=TRUE)  #these arguments are passed on from a command line that sends script to a HPC server
+# Alternatively, can comment out and set parameters as below
+datnum<-as.numeric(args[1])   
+
+T1 = list.files(pattern="*.csv")
+
+s2=seq(20,1000,by=20)
+s1=s2-19
+
+temp=T1[s1[datnum]:s2[datnum]]
+
+#setting random seeds for the parallely run replications
+#MAR-CATS, 40 school clsuters
+set.seed(9127143)
+seed=sample(1e8,50,replace=F)[datnum]
+
+#MAR-CATS, 10 school clsuters
+# set.seed(5194143)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 40 school clsuters
+# set.seed(9997143)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 10 school clsuters
+# set.seed(5178143)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+set.seed(seed)
+
+##load the simulated data 
+data=lapply(T1,read.csv)
+
+MVNIslwideJAV_results.est=matrix(NA,nrow=7,ncol=length(data))
+MVNIslwideJAV_results.sd=matrix(NA,nrow=7,ncol=length(data))
+MVNIslwideJAV_results.RE=matrix(NA,nrow=3,ncol=length(data))
+MVNIslwideJAV_results.ICC=matrix(NA,nrow=2,ncol=length(data))
+MVNIslwideJAV_results.CI=c()
+
+for (i in 1:length(data)){
+  
+  simdataL= data[[i]]
+  simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
+  
+  ##Reshape to wide format
+  simdataw=reshape(simdataL,v.names=c("napscore_z","p_sdq","c_dep"),idvar="c_id",timevar="wave", direction= "wide")
+  
+  ##remove unwanted variables
+  simdataw=simdataw[,!names(simdataw)%in%c("napscore_z.2","napscore_z.4","napscore_z.6",
+                                           "p_sdq.3","p_sdq.5","p_sdq.7","c_dep.3","c_dep.5","c_dep.7")]
+  
+  ##Set number of imputations 
+  M=20
+  nburn=1000
+  NB=100
+  
+  ##generate the interaction terms
+  simdataw$c_dep.ses.2=simdataw$c_dep.2*simdataw$c_ses
+  simdataw$c_dep.ses.4=simdataw$c_dep.4*simdataw$c_ses
+  simdataw$c_dep.ses.6=simdataw$c_dep.6*simdataw$c_ses
+  
+  ##create a dataframe with variables to be imputed
+  myvars <- names(simdataw) %in% c("c_dep.2","c_dep.4","c_dep.6","c_ses","c_dep.ses.2","c_dep.ses.4","c_dep.ses.6") 
+  dataimp=simdataw[myvars]
+  
+  
+  ##create school dummy indicators(edit accordingly for 10 school clusters)
+  school_DI=data.frame(model.matrix(simdataw$c_id~as.factor(simdataw$school)-1,simdataw))
+  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"),"schoo_Ind",40))
+  school_DI=school_DI[,1:39]
+  
+  ##create a dataframe with complete variables
+  datacomp= cbind(Intercept=rep(1,nrow(simdataw)),
+                  simdataw[,names(simdataw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
+                                                 "c_age","c_gender","c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6")],school_DI)
+  
+  ##perform imputations without the random effects (SL imputation)
+  imp1<-jomo1con(Y=dataimp, X=datacomp, nimp=M,nburn=nburn,nbetween=NB)
+  
+  #Examine convergence
+  # impCheck<-jomo1con.MCMCchain(Y=dataimp, X=datacomp, nburn=nburn)
+  # plot(c(1:nburn),impCheck$collectbeta[1,1,1:nburn],type="l")
+  
+  ##Analysis
+  mylist=list()
+  
+  for(m in 1:M)
+  {
+    datw<-imp1[imp1$Imputation==m,]
+    
+    #1. attach the school variable and remove school indicator variables
+    datw=cbind(datw,simdataw$school)
+    
+    #2. remove unwanted variables
+    datw=datw[,names(datw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7","c_age","c_gender","c_dep.2","c_dep.4","c_dep.6",
+                                "c_dep.ses.2","c_dep.ses.4","c_dep.ses.6","c_ses","c_nap1_z","id","simdataw$school")]
+    colnames(datw)[colnames(datw)=="simdataw$school"] <- "school"
+    
+    #3. rename depression variables for reshape
+    colnames(datw)[colnames(datw)=="c_dep.2"] <- "prev_dep.3"
+    colnames(datw)[colnames(datw)=="c_dep.4"] <- "prev_dep.5"
+    colnames(datw)[colnames(datw)=="c_dep.6"] <- "prev_dep.7"
+    
+    colnames(datw)[colnames(datw)=="c_dep.ses.2"] <- "inter.3"
+    colnames(datw)[colnames(datw)=="c_dep.ses.4"] <- "inter.5"
+    colnames(datw)[colnames(datw)=="c_dep.ses.6"] <- "inter.7"
+    
+    #4. Reshape to long
+    
+    datL=reshape(datw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),
+                                    c("napscore_z.3","napscore_z.5","napscore_z.7"),
+                                    c("inter.3","inter.5","inter.7")),idvar="id", 
+                 v.names=c("prev_dep","napscore_z","inter"), times=c(3,5,7),direction= "long")
+    
+    datL <- datL[order(datL$school,datL$id),]    
+    
+    #5. save the dataset in a list
+    mylist[[m]]= datL
+  }
+  
+  #fit the analysis of interest on the imputed datasets 
+  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+c_age+c_gender+c_nap1_z+c_ses+inter
+                                           +(1|school/id), data = d)} )
+  
+  #combine the estimates 
+  MI_est=testEstimates(mods, var.comp=TRUE)
+  
+  #Compute CIs
+  CI=matrix(NA,7,2)
+  Conf=confint(MI_est)
+  CI[,1]=as.vector(Conf[2:8,1])
+  CI[,2]=as.vector(Conf[2:8,2])
+  MVNIslwideJAV_results.CI=cbind(MVNIslwideJAV_results.CI,CI)
+  
+  #store the estimates
+  MVNIslwideJAV_results.est[,i]=MI_est$estimates[2:8,1]
+  MVNIslwideJAV_results.sd[,i]=MI_est$estimates[2:8,2]
+  MVNIslwideJAV_results.RE[1,i]=sqrt(MI_est$var.comp[2,1])
+  MVNIslwideJAV_results.RE[2,i]=sqrt(MI_est$var.comp[1,1])
+  MVNIslwideJAV_results.RE[3,i]=sqrt(MI_est$var.comp[3,1])
+  
+  MVNIslwideJAV_results.ICC[1,i]=MI_est$var.comp[2,1]/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  MVNIslwideJAV_results.ICC[2,i]=(MI_est$var.comp[2,1]+MI_est$var.comp[1,1])/(MI_est$var.comp[2,1]+MI_est$var.comp[1,1]+MI_est$var.comp[3,1])
+  
+}
+
+rownames(MVNIslwideJAV_results.est)=rows
+colnames(MVNIslwideJAV_results.est)=c(seq(1:length(data)))
+
+rownames(MVNIslwideJAV_results.sd)=rows
+colnames(MVNIslwideJAV_results.sd)=c(seq(1:length(data)))
+
+rownames(MVNIslwideJAV_results.RE)=c("level 3","level 2","level 1")
+colnames(MVNIslwideJAV_results.RE)=c(seq(1:length(data)))
+
+rownames(MVNIslwideJAV_results.ICC)=c("level 3","level 2")
+colnames(MVNIslwideJAV_results.ICC)=c(seq(1:length(data)))
+
+rownames(MVNIslwideJAV_results.CI)=rows
+colnames(MVNIslwideJAV_results.CI)=c(rep(1:length(data),each=2))
+
+##save the results
+write.xlsx(MVNIslwideJAV_results.est,paste0("MVNIslwideJAV_results.est",datnum,".xlsx"))
+write.xlsx(MVNIslwideJAV_results.sd,paste0("MVNIslwideJAV_results.sd",datnum,".xlsx"))
+write.xlsx(MVNIslwideJAV_results.RE,paste0("MVNIslwideJAV_results.RE",datnum,".xlsx"))
+write.xlsx(MVNIslwideJAV_results.CI,paste0("MVNIslwideJAV_results.CI",datnum,".xlsx"))
+write.xlsx(MVNIslwideJAV_results.ICC,paste0("MVNIslwideJAV_results.ICC",datnum,".xlsx"))
+
+##############################################################################
 #                      SMC-JM-2L-DI                                          #
 ##############################################################################
+##commands used for running the simulations  in parallel
+args = commandArgs(trailingOnly=TRUE)  #these arguments are passed on from a command line that sends script to a HPC server
+# Alternatively, can comment out and set parameters as below
+datnum<-as.numeric(args[1])   
+
+T1 = list.files(pattern="*.csv")
+
+s2=seq(20,1000,by=20)
+s1=s2-19
+
+temp=T1[s1[datnum]:s2[datnum]]
+
+#setting random seeds for the parallely run replications
+#MAR-CATS, 40 school clsuters
+set.seed(3127143)
+seed=sample(1e8,50,replace=F)[datnum]
+
+#MAR-CATS, 10 school clsuters
+# set.seed(9194143)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 40 school clsuters
+# set.seed(35627143)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 10 school clsuters
+# set.seed(9192243)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+set.seed(seed)
+
+##load the simulated data 
+data=lapply(T1,read.csv)
 
 SMCJMDI_results.est=matrix(NA,nrow=7,ncol=length(data))
 SMCJMDI_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -1241,8 +1336,7 @@ for (i in 1:length(data)){
                                            "napscore_z.6","prev_sdq.6","c_dep.3","c_dep.5","c_dep.7")]
   
   ##reshape back to long
-  simdataL=reshape(simdataw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3",
-                                                                                      "napscore_z.5",  "napscore_z.7"),
+  simdataL=reshape(simdataw,varying =list(c("prev_dep.3","prev_dep.5","prev_dep.7"),c("napscore_z.3","napscore_z.5",  "napscore_z.7"),
                                           c("prev_sdq.3","prev_sdq.5","prev_sdq.7")),idvar="c_id", 
                    v.names=c("prev_dep","napscore_z","prev_sdq"), times=c(3,5,7),direction= "long")
   
@@ -1254,13 +1348,10 @@ for (i in 1:length(data)){
   nburn=1000
   NB=100
   
-  ##create school dummy indicators
-  school_DI=data.frame(model.matrix(simdataL$c_id~as.factor(simdataL$school)-1,
-                                    simdataL))
-  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"), 
-                                                       "schoo_Ind",40))
+  ##create school dummy indicators(edit accordingly for 10 school clusters)
+  school_DI=data.frame(model.matrix(simdataL$c_id~as.factor(simdataL$school)-1,simdataL))
+  names(school_DI)[1:ncol(school_DI)] <- unlist(mapply(function(x,y) paste(x, seq(1,y), sep="_"),"schoo_Ind",40))
   school_DI=school_DI[,1:39]
-  
   
   ##define a dataframe with all variables required
   data_jomo=cbind(simdataL[!names(simdataL)%in%c("child","school")],school_DI)
@@ -1278,7 +1369,6 @@ for (i in 1:length(data)){
                         schoo_Ind_38+schoo_Ind_39+prev_sdq+(1|c_id))
   
   ##running the imputations
-  set.seed(2946)
   imp5<-jomo.lmer(formula,data_jomo,level=mylevel,nimp=M,nburn=nburn,nbetween = NB)
   
   #Examine convergence
@@ -1291,8 +1381,7 @@ for (i in 1:length(data)){
     
     #extract the ith imputed data set and attach the school variable
     imputed<-imp5[imp5$Imputation==m,]
-    imputed=imputed[,names(imputed)%in%c("prev_dep","c_age", "c_gender",
-                                         "c_ses","c_nap1_z","time",
+    imputed=imputed[,names(imputed)%in%c("prev_dep","c_age", "c_gender","c_ses","c_nap1_z","time",
                                          "napscore_z","clus")]
     imputed$school=simdataL$school
     #imputed$clus=as.integer(imputed$clus)
@@ -1302,8 +1391,7 @@ for (i in 1:length(data)){
   }
   
   #fit the analysis of interest on the imputed datasets 
-  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+
-                                             c_gender+c_nap1_z+c_ses
+  mods <- lapply(mylist,function(d) {lmer( napscore_z~prev_dep+time+prev_dep*c_ses+c_age+c_gender+c_nap1_z+c_ses
                                            +(1|school/clus), data = d)} )
   
   #combine the estimates 
@@ -1344,15 +1432,48 @@ rownames(SMCJMDI_results.CI)=rows
 colnames(SMCJMDI_results.CI)=c(rep(1:length(temp), each=2))
 
 ##save the results
-write.xlsx(SMCJMDI_results.est,"SMCJMDI_results.est.xlsx")
-write.xlsx(SMCJMDI_results.sd,"SMCJMDI_results.sd.xlsx")
-write.xlsx(SMCJMDI_results.RE,"SMCJMDI_results.RE.xlsx")
-write.xlsx(SMCJMDI_results.CI,"SMCJMDI_results.CI.xlsx")
-write.xlsx(SMCJMDI_results.ICC,"SMCJMDI_results.ICC.xlsx")
+write.xlsx(SMCJMDI_results.est,paste0("SMCJMDI_results.est",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.sd,paste0("SMCJMDI_results.sd",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.RE,paste0("SMCJMDI_results.RE",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.CI,paste0("SMCJMDI_results.CI",datnum,".xlsx"))
+write.xlsx(SMCJMDI_results.ICC,paste0("SMCJMDI_results.ICC",datnum,".xlsx"))
 
 ##############################################################################
 #                      SMC-SM-2L-DI                                          #
 ##############################################################################
+##commands used for running the simulations  in parallel
+args = commandArgs(trailingOnly=TRUE)  #these arguments are passed on from a command line that sends script to a HPC server
+# Alternatively, can comment out and set parameters as below
+datnum<-as.numeric(args[1])   
+
+T1 = list.files(pattern="*.csv")
+
+s2=seq(100,1000,by=100)
+s1=s2-99
+
+temp=T1[s1[datnum]:s2[datnum]]
+
+#setting random seeds for the parallely run replications
+#MAR-CATS, 40 school clsuters
+set.seed(9927143)
+seed=sample(1e8,10,replace=F)[datnum]
+
+#MAR-CATS, 10 school clsuters
+# set.seed(2294133)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 40 school clsuters
+# set.seed(9927233)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+#MAR-inflated, 10 school clsuters
+# set.seed(2225613)
+# seed=sample.int(1e8,50,replace = F)[datnum] 
+
+set.seed(seed)
+
+##load the simulated data 
+data=lapply(T1,read.csv)
 
 SMCSMDI_results.est=matrix(NA,nrow=7,ncol=length(data))
 SMCSMDI_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -1478,8 +1599,8 @@ rownames(SMCSMDI_results.CI)=rows
 colnames(SMCSMDI_results.CI)=c(rep(1:length(data), each=2))
 
 ##save the results
-write.xlsx(SMCSMDI_results.est,"SMCSMDI_results.est.xlsx")
-write.xlsx(SMCSMDI_results.sd,"SMCSMDI_results.sd.xlsx")
-write.xlsx(SMCSMDI_results.RE,"SMCSMDI_results.RE.xlsx")
-write.xlsx(SMCSMDI_results.CI,"SMCSMDI_results.CI.xlsx")
-write.xlsx(SMCSMDI_results.ICC,"SMCSMDI_results.ICC.xlsx")
+write.xlsx(SMCSMDI_results.est,paste0("SMCSMDI_results.est",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.sd,paste0("SMCSMDI_results.sd",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.RE,paste0("SMCSMDI_results.RE",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.CI,paste0("SMCSMDI_results.CI",datnum,".xlsx"))
+write.xlsx(SMCSMDI_results.ICC,paste0("SMCSMDI_results",datnum,".ICC.xlsx"))
