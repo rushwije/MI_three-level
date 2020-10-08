@@ -9,7 +9,7 @@
 
 
 **NOTE: This script is only for data generation, all MI approaches evaluated in the 
-*paper were implemented using R as a majority of them are not available in Stata
+*paper were implemented using R 
 
 clear all
 set more off
@@ -111,6 +111,7 @@ gen prev_dep2=prev_dep*prev_dep
 gen napscore_z=2.0+ (-0.024)*prev_dep+ (-0.01)*wave+ (-0.009)*prev_dep2+ ///
 			(-0.20)*c_age+ 0.14*c_gender+0.71*c_nap1_z+ (-0.01)*c_ses + b_0i + b_0ij+e_ijk if ///
 			wave==3 |wave==5|wave==7
+drop prev_dep2
 			}
 
 *STEP (viii):
@@ -211,7 +212,7 @@ simul, seed(32305687) simno(1001) schoolclus(40) clussize(30) model(T1) mdm(MAR2
 *MAR-inflated, 10 school clusters
 simul, seed(40315687) simno(1000) schoolclus(10) clussize(120) model(T1) mdm(MAR2)
 
-
+******************************************************************************************
 *Analysis model 2: Interaction between the time-varying exposure and a time-fixed baseline variable 
 
 *MAR-CATS, 40 school clusters(omitted 1 dataset i=488 due to nonconvergence in SMC-JM-3L)
@@ -226,6 +227,7 @@ simul, seed(67014685) simno(1000) schoolclus(40) clussize(30) model(T2) mdm(MAR2
 *MAR-inflated, 10 school clusters(omitted 3 datasets i=63,i=102,i=92 due to nonconvergence in SMC-JM-3L)
 simul, seed(17092020) simno(1003) schoolclus(10) clussize(120) model(T2) mdm(MAR2)
 
+******************************************************************************************
 *Analysis model 3: Quadratic term in the exposure
 
 *MAR-CATS, 40 school clusters(omitted 1 dataset i=667 due to nonconvergence in SMC-JM-3L)
