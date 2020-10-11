@@ -71,6 +71,7 @@ gen u_0ij=rnormal(0,0.9)
 gen b_0ij=rnormal(0,sqrt(0.45))
 gen v_0ij=rnormal(0,4.1)
 
+*STEP (vi)
 *Expand the individuals to include 5 repeated observations (waves 2-6)
 expand 6
 
@@ -79,7 +80,7 @@ bysort school child: generate wave = _n+1
 *Generate a child ID
 gen c_id=string(school)+"_"+string(child)
 
-*STEP (vi):
+*STEP (vii):
 * Simulate values for depression (mean centered) at waves 2-6
 gen e_c_dep=rnormal(0,1.5)
 gen c_dep= -0.7+0.10*c_age +(-0.46)*c_gender+ (-0.01)*c_nap1_z+(-0.22)*c_ses + 0.02*wave+ ///
@@ -90,7 +91,7 @@ drop e_c_dep
 bysort school child: gen prev_dep=c_dep[_n-1]
 sort school child wave
 
-*STEP (vii):
+*STEP (viii):
 * Simulate the values for the NAPLAN scores at waves 3,5 and 7
 gen e_ijk=rnormal(0,0.5)
 
@@ -114,7 +115,7 @@ gen napscore_z=2.0+ (-0.024)*prev_dep+ (-0.01)*wave+ (-0.009)*prev_dep2+ ///
 drop prev_dep2
 			}
 
-*STEP (viii):
+*STEP (ix):
 * Simulate values for the SDQ variable
 gen e_p_sdq=rnormal(0,2.8)
 gen p_sdq=16.2+2.5*c_dep+(-0.1)*wave+v_0i+v_0ij+e_p_sdq if wave==2|wave==4|wave==6
