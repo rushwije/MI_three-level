@@ -501,9 +501,7 @@ for (i in 1:length(data)){
   datacomp= cbind(Intercept=rep(1,nrow(simdataw)),
                   simdataw[,names(simdataw)%in%c("napscore_z.3","napscore_z.5","napscore_z.7",
                                                  "c_age","c_gender",
-                                                 "c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6"
-                  )],
-                  school_DI)
+                                                 "c_nap1_z","p_sdq.2","p_sdq.4","p_sdq.6")],school_DI)
   
   ##perform imputations without the random effects (SL imputation)
   imp1<-jomo1con(Y=dataimp, X=datacomp, nimp=M,nburn=nburn,nbetween=NB)
@@ -597,7 +595,6 @@ write.xlsx(MVNIslwide_results.sd,paste0("MVNIslwide_results",datnum,".sd.xlsx"))
 write.xlsx(MVNIslwide_results.RE,paste0("MVNIslwide_results",datnum,".RE.xlsx"))
 write.xlsx(MVNIslwide_results.CI,paste0("MVNIslwide_results",datnum,".CI.xlsx"))
 write.xlsx(MVNIslwide_results.ICC,paste0("MVNIslwide_results",datnum,".ICC.xlsx"))
-
 
 ##############################################################################
 #                      SMC-JM-2L-DI                                          #
