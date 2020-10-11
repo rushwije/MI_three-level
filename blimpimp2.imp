@@ -1,0 +1,24 @@
+# this is a comment
+DATA:data1.csv;
+VARIABLES: c_id  time napscore school  age gender  ses nap1  prevdep prevsdq ;
+CLUSTERID: c_id  school;
+ORDINAL:gender;
+FIXED: time  age gender nap1 prevsdq;
+MISSING: 999;
+MODEL: napscore ~ time  age gender ses nap1 prevsdq prevdep prevdep*time;
+
+#use for the analysis model involving an interaction between the time-varying exposure and a time-fixed confounder
+#MODEL: napscore ~ time  age gender ses nap1 prevsdq prevdep prevdep*ses;
+
+#fuse for the analysis model involving a quadratic effect of the the time-varying exposure
+#MODEL: napscore ~ time  age gender ses nap1 prevsdq prevdep prevdep*prevdep;
+
+SEED: 2936;
+NIMPS: 20;
+BURN: 2500;
+THIN: 100;
+OPTIONS: psr estimates stacked ;
+
+
+
+
