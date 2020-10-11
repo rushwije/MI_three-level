@@ -20,7 +20,7 @@
 
 #For the rest of the approaches the 1000 replications were run in parallel for each simulation scenario 
 
-#inidvidual seeds used for each simulation scenario and paralley run simulations are given as comments
+#individual seeds used for each simulation scenario and paralley run simulations are given as comments
 
 ##clear the workspace
 # rm(list = ls())
@@ -29,7 +29,7 @@
 require(lme4)   #for fitting the lmer model
 require(jomo)   # for single-level and two-level JM and two-level SMC JM
 require(mitml)  # for pooling the results
-require(mice)   #for single and two-levl FCS
+require(mice)   #for single and two-level FCS
 require(xlsx)   #for writing/exporting the results
 require(DataCombine) #for generating the lagged wave variables
 
@@ -459,7 +459,7 @@ seed=sample(1e8,5,replace=F)[datnum]
 set.seed(seed)
 
 ##load the simulated data 
-data=lapply(T1,read.csv)
+data=lapply(temp,read.csv)
 
 MVNIslwide_results.est=matrix(NA,nrow=7,ncol=length(data))
 MVNIslwide_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -469,7 +469,6 @@ MVNIslwide_results.CI=c()
 
 
 for (i in 1:length(data)){
-  
   simdataL= data[[i]]
   simdataL <- simdataL[order(simdataL$school,simdataL$c_id),]
   
@@ -637,7 +636,7 @@ seed=sample(1e8,50,replace=F)[datnum]
 set.seed(seed)
 
 ##load the simulated data 
-data=lapply(T1,read.csv)
+data=lapply(temp,read.csv)
 
 SMCJMDI_results.est=matrix(NA,nrow=7,ncol=length(data))
 SMCJMDI_results.sd=matrix(NA,nrow=7,ncol=length(data))
@@ -814,7 +813,7 @@ seed=sample(1:100000,10)[datnum]
 set.seed(seed)
 
 ##load the simulated data 
-data=lapply(T1,read.csv)
+data=lapply(temp,read.csv)
 
 SMCSMDI_results.est=matrix(NA,nrow=7,ncol=length(data))
 SMCSMDI_results.sd=matrix(NA,nrow=7,ncol=length(data))
