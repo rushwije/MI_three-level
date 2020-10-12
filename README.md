@@ -8,6 +8,6 @@ This repository contains the following files containing the code for the simulat
  
  blimpimp2.imp: Blimp syntax file for conducting SMC-JM-3L in Blimp version 1.0.6
  
- Blimp_analysis.R : R script for post imputation analysis and pooling for SMC-JM-3L4
+ Blimp_analysis.R : R script for post imputation analysis and pooling for SMC-JM-3L
  
  Blimp simulation.R: R script for running an external simulation in Blimp
