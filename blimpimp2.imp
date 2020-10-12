@@ -1,6 +1,6 @@
 #################################################################################
 #                                                                                                                                                                                        #
-#   SMC-JM-3L in Blimp for the substantive analysis models in the paper:                                                      #
+#   SMC-JM-3L in Blimp (v 1.0.6)  for the substantive analysis models in the paper:                                       #
 # "Evaluation of approaches for accommodating interactions and non-linear terms                                     #
 #   in multiple imputation of incomplete three-level data"                                                                                     #
 #                                                                                                                                                                                       #
@@ -10,10 +10,10 @@
 
 # this is a comment
 
-#for the three analsyis models use the commented out MODEL command accordingly.
+#for the three analysis models use the commented out MODEL command accordingly.
 # more instructions on running SMC-JM-3L  or simulations in Blimp can be found in the Blimp user guide and at http://www.appliedmissingdata.com/
 
-#SMC-JM-3L in Blimp
+##################SMC-JM-3L in Blimp#####################################
 
 VARIABLES: c_id  time napscore school  age gender  ses nap1  prevdep prevsdq ;
 CLUSTERID: c_id  school;
