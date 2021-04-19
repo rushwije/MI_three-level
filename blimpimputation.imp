@@ -1,0 +1,51 @@
+#######################################################################################
+#   Filename    :	blimpimputation.imp
+#                   
+#                   SMC-JM-3L MI approach implemented in Blimp
+#                                                                             
+#   Project     :   BiomJ article "Evaluation of approaches for accommodating interactions and 
+#                   non-linear terms in multiple imputation of incomplete three-level data"                                                             
+#   Author      :   Rushani Wijesuriya                                                                
+#   Date        :   07.09.2020
+########################################################################################
+
+#********Notes for running the MI approach in this script**********************
+
+# This script should be used in combination with the R script Blimp_simulation.R
+# The MODEL command specifies the imputation model to be fitted. 
+# Therefore under each analsyis model, comment out the irrelevant analysis models. 
+# After changing the script, save the script and run the R script Blimp_simulation.R 
+# to perform the simulations
+# More instructions on running SMC-JM-3L  or simulations in Blimp can be found in the 
+# Blimp user guide and at http://www.appliedmissingdata.com/
+# Also see the README file for the complete workflow of the simulation study
+
+##################SMC-JM-3L in Blimp#####################################
+DATA:data1.csv;
+VARIABLES: c_id  time napscore school  age gender  ses nap1  prevdep prevsdq ;
+CLUSTERID: c_id  school;
+ORDINAL:gender;
+FIXED: time  age gender nap1 prevsdq;
+MISSING: 999;
+
+#Imputation model specification under analysis model involving an interaction between 
+#the time-varying exposure and time
+MODEL: napscore ~ time  age gender ses nap1 prevsdq prevdep prevdep*time;
+
+#Use the following for the analysis model involving an interaction between the time-varying
+#exposure and a time-fixed confounder
+#MODEL: napscore ~ time  age gender ses nap1 prevsdq prevdep prevdep*ses;
+
+#Use for the following analysis model involving a quadratic effect of the the time-varying 
+#exposure
+#MODEL: napscore ~ time  age gender ses nap1 prevsdq prevdep prevdep*prevdep;
+
+SEED: 2936;
+NIMPS: 20;
+BURN: 2500;
+THIN: 100;
+OPTIONS: psr estimates stacked ;
+
+
+
+
